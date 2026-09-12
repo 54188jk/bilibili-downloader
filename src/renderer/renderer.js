@@ -1342,6 +1342,10 @@ $('tutorialBtn').addEventListener('click', () => App.openTutorial());
   await refreshAuth();
   updateStatus();
   syncBrand('bili');
+
+  // 首屏初始化真正完成（版本 / 保存目录 / ffmpeg / 登录态均已就绪），
+  // 通知主进程关闭启动动画——进度由此事件驱动，不是定时器假装出来
+  try { if (App.appReady) App.appReady(); } catch (_) {}
 })();
 
 /* ============================================================

@@ -164,4 +164,7 @@ contextBridge.exposeInMainWorld('api', {
   aiModelSave: (model) => ipcRenderer.invoke('ai:modelSave', model),
   aiModelDelete: (id) => ipcRenderer.invoke('ai:modelDelete', id),
 
+  // ===== 启动动画：渲染层首屏初始化真正完成后上报，主进程据此关闭启动页 =====
+  appReady: () => ipcRenderer.send('app:ready'),
+
 });

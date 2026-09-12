@@ -65,8 +65,16 @@
   var footText = document.getElementById('footText');
 
   var current = 0;      // 当前显示进度
-  var target = 0;       // 目标进度（主进程下发）
+  var target = 0;       // 目标进度（主进程真实事件下发）
   var timer = null;
+  var footBase = 'BiliGrab';
+  var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+
+  // 真实耗时显示：计时从页面首帧开始，反映实际启动用时
+  setInterval(function () {
+    var now = (window.performance && performance.now) ? performance.now() : Date.now();
+    footText.textContent = footBase + '  ·  已用 ' + ((now - t0) / 1000).toFixed(1) + 's';
+  }, 100);
 
   // 数字平滑滚动到目标值，避免进度跳跃
   function tick() {
@@ -101,7 +109,7 @@
   var api = window.splash;
   if (api) {
     api.onInit(function (d) {
-      if (d && d.version) footText.textContent = 'BiliGrab  v' + d.version;
+      if (d && d.version) footBase = 'BiliGrab  v' + d.version;
     });
     api.onIcon(function (dataUrl) {
       if (!dataUrl) return;
@@ -116,12 +124,19 @@
       setTimeout(function () { document.body.classList.add('leaving'); }, 240);
     });
   } else {
-    // 兜底：独立打开本页（或预加载未注入）时播放演示流程，便于预览效果
+    // 预览模式：独立打开本页（无主进程通道）时播放演示流程，仅用于查看效果。
+    // 应用内运行时走上面的真实事件通道，每一步完成才推进。
+    var sub = document.querySelector('.app-sub');
+    if (sub) sub.textContent = '预览模式 · 演示流程（应用内为真实进度）';
     var steps = [
-      [14, '正在恢复登录状态'],
-      [38, '正在启动音乐服务'],
-      [62, '正在启动影视服务'],
-      [82, '正在加载主界面'],
+      [10, '初始化运行环境'],
+      [18, '注入网络规则'],
+      [28, '恢复 B 站登录态'],
+      [40, '恢复抖音登录态'],
+      [56, '音乐服务已就绪'],
+      [74, '影视服务已就绪'],
+      [86, '正在渲染主界面'],
+      [96, '界面就绪'],
       [100, '准备就绪'],
     ];
     var i = 0;

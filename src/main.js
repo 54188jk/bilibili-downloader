@@ -166,14 +166,36 @@ function createSplash() {
   return splashWindow;
 }
 
-// 推进启动进度（无 splash 时为空操作）
+// 推进启动进度（无 splash 时为空操作）。百分比只前进不回退，保证进度真实可信
+// 设环境变量 BILIGRAB_SPLASH_DEBUG=1 可在控制台打印每一步的真实耗时
+const appStartAt = Date.now();
+let splashPct = 0;
 function splashStep(pct, text) {
   try {
+    if (typeof pct === 'number' && pct > splashPct) splashPct = pct;
+    if (process.env.BILIGRAB_SPLASH_DEBUG) {
+      console.log('[splash] ' + splashPct + '% ' + (text || '') + ' (+' + ((Date.now() - appStartAt) / 1000).toFixed(2) + 's)');
+    }
     if (splashWindow && !splashWindow.isDestroyed()) {
-      splashWindow.webContents.send('splash:progress', { pct, text });
+      splashWindow.webContents.send('splash:progress', { pct: splashPct, text });
     }
   } catch (_) {}
 }
+
+// 主窗口显示：由渲染层真实就绪事件驱动，而非定时器
+let mainShown = false;
+function showMainWindow(pct, text) {
+  if (mainShown) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainShown = true;
+  splashStep(pct, text);
+  finishSplash(() => {
+    try { mainWindow.show(); mainWindow.focus(); } catch (_) {}
+  });
+}
+
+// 渲染层首屏初始化真正完成（版本 / 保存目录 / ffmpeg / 登录态均就绪）后上报
+ipcMain.on('app:ready', () => showMainWindow(96, '界面就绪'));
 
 // 收尾：进度拉满 -> 播放离场动画 -> 销毁 -> 回调（显示主窗口）
 function finishSplash(cb) {
@@ -227,17 +249,14 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenuBarVisibility(false);
 
-  // 首帧就绪后播放启动动画离场，随后显示主窗口（避免白窗闪烁）
-  let mainShown = false;
-  const showMain = () => {
-    if (mainShown) return;
-    mainShown = true;
-    finishSplash(() => {
-      try { mainWindow.show(); mainWindow.focus(); } catch (_) {}
-    });
-  };
-  mainWindow.once('ready-to-show', showMain);
-  setTimeout(showMain, 3000); // 兜底：极端情况（渲染卡住）也必须显示主窗口
+  // 真实进度：首帧绘制完成 = 86%，渲染层初始化完成（app:ready）= 96%，之后才关闭启动动画
+  mainShown = false;
+  mainWindow.webContents.once('did-finish-load', () => splashStep(84, '主界面资源加载完成'));
+  mainWindow.once('ready-to-show', () => {
+    splashStep(86, '正在渲染主界面');
+    // 兜底：渲染层 5s 内未上报就绪（脚本异常等极端场景）才强制显示，正常情况由 app:ready 驱动
+    setTimeout(() => showMainWindow(96, '界面就绪'), 5000);
+  });
   mainWindow.on('close', (e) => {
     // 托盘驻留：关闭主窗口时隐藏而非销毁，托盘菜单"退出"会强制 app.quit()
     if (!app.isQuitting) {
@@ -2726,8 +2745,18 @@ app.whenReady().then(async () => {
     }
   }
 
+  // 初始化截图工具（托盘/全局热键/开机自启/--hidden）——最先执行以获得 hiddenStart 判定
+  const captureInit = capture.init({ mainWindowGetter: () => mainWindow });
+  const hiddenStart = captureInit?.hiddenStart;
+
+  // 启动动画：尽早创建（后台静默启动 --hidden 时不显示）。
+  // 此后进度完全由真实步骤完成事件驱动，不做任何人为延时
+  if (!hiddenStart) createSplash();
+  splashStep(4, '正在启动');
+
   // 使用真实 Chrome UA，让登录页与视频播放更稳定
   setupSessionUA();
+  splashStep(10, '初始化运行环境');
 
   // B站视频直链播放防盗链 + 影视封面图防盗链：为媒体域名请求注入 Referer 与 UA（需在 ready 后注册）
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -2762,20 +2791,9 @@ app.whenReady().then(async () => {
     }
     callback({ requestHeaders: details.requestHeaders });
   });
+  splashStep(18, '注入网络规则');
 
-  // 初始化截图工具（托盘/全局热键/开机自启/--hidden）——提前执行以获得 hiddenStart 判定
-  const captureInit = capture.init({ mainWindowGetter: () => mainWindow });
-  const hiddenStart = captureInit?.hiddenStart;
-
-  // 启动动画：后台静默启动（--hidden）时不显示
-  if (!hiddenStart) {
-    createSplash();
-    // 给启动页一点渲染时间，避免一闪而过
-    await new Promise((r) => setTimeout(r, 180));
-  }
-  splashStep(14, '正在恢复登录状态');
-
-  // 启动时尝试加载已保存登录态（B站 + 抖音）
+  // 启动时尝试加载已保存登录态（B站 + 抖音）——无论成功与否都如实推进
   try {
     const auth = loadAuth();
     if (auth && auth.cookie) {
@@ -2783,6 +2801,7 @@ app.whenReady().then(async () => {
       applyCookieToSession(auth.cookie);
     }
   } catch (_) {}
+  splashStep(28, '恢复 B 站登录态');
 
   try {
     const dyAuth = loadDyAuth();
@@ -2790,28 +2809,31 @@ app.whenReady().then(async () => {
       injectDyCookieToSession(dyAuth.cookie);
     }
   } catch (_) {}
+  splashStep(40, '恢复抖音登录态');
 
-  splashStep(38, '正在启动音乐服务');
-
-  // 自动启动本地音乐 API（用户可随时在音乐面板使用）
+  // 自动启动本地音乐 API（真实等待启动结果，不预设耗时）
+  let musicOk = false;
   try {
     const ms = await musicApi.ensureServer();
-    if (!ms.ok) console.error('[music] 启动失败:', ms.error);
+    musicOk = !!(ms && ms.ok);
+    if (!musicOk) console.error('[music] 启动失败:', ms && ms.error);
   } catch (e) {
     console.error('[music] 启动异常:', e.message);
   }
-
-  splashStep(62, '正在启动影视服务');
+  splashStep(56, musicOk ? '音乐服务已就绪' : '音乐服务未启动，继续');
 
   // 自动启动本地影视 API（多源聚合搜索 + 磁盘缓存，随应用启停）
+  let movieOk = false;
   try {
     const ma = await movieApi.ensureServer({ cacheDir: app.getPath('userData') });
-    if (!ma.ok) console.error('[movie-api] 启动失败:', ma.error);
+    movieOk = !!(ma && ma.ok);
+    if (!movieOk) console.error('[movie-api] 启动失败:', ma && ma.error);
   } catch (e) {
     console.error('[movie-api] 启动异常:', e.message);
   }
+  splashStep(74, movieOk ? '影视服务已就绪' : '影视服务未启动，继续');
 
-  splashStep(82, '正在加载主界面');
+  splashStep(78, '正在创建主窗口');
 
   if (!hiddenStart) {
     createWindow();
