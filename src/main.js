@@ -339,7 +339,7 @@ ipcMain.on('desktop-lyrics:tick', (_evt, payload) => {
 ipcMain.handle('app:version', () => app.getVersion());
 
 /* ============================================================
- * AI 对话后端
+ * 智能助手对话后端
  * 安全原则：内置模型的 API 密钥 / 地址 / 模型名 只存在于主进程
  * （本文件内存 + 密钥文件 ai-secrets.json / 环境变量），
  * 渲染层只发送对话内容，通过事件 ai:chunk / ai:done 接收回复，

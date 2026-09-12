@@ -403,11 +403,11 @@ body.dark .task-item.pick.active{border-color:rgba(10,132,255,.45)}
 .scroll-200{max-height:220px;overflow-y:auto}
 
 /* ============================================================
- * AI 对话界面（内置 auto 模型 + 自定义模型，密钥仅主进程）
+ * 智能助手对话界面（内置 auto 模型 + 自定义模型，密钥仅主进程）
  * ============================================================ */
 @keyframes blink{0%,60%,100%{opacity:.25;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 
-/* ---- AI 视图布局 ---- */
+/* ---- 智能助手视图布局 ---- */
 .ai-shell{height:calc(100vh - 118px);display:flex;flex-direction:column;margin:-22px -26px -96px;overflow:hidden}
 .chat-scroll{flex:1;overflow-y:auto;padding:18px 26px;display:flex;flex-direction:column;gap:14px}
 .chat-empty{margin:auto;text-align:center;color:var(--ink-3);font-size:13px;line-height:1.7;max-width:340px}

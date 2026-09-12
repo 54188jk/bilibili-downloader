@@ -1345,7 +1345,7 @@ $('tutorialBtn').addEventListener('click', () => App.openTutorial());
 })();
 
 /* ============================================================
- * AI 对话（密钥只在主进程；渲染层只发送对话内容、接收回复）
+ * 智能助手对话（密钥只在主进程；渲染层只发送对话内容、接收回复）
  * ============================================================ */
 let aiMessages = [];
 let currentModelId = 'auto';   // 'auto'（内置托管模型）或自定义模型 id
@@ -1357,7 +1357,7 @@ function renderCustomModels(list) {
   const g = aiEl('customGroup'), listBox = aiEl('modelsCustomList');
   g.innerHTML = ''; listBox.innerHTML = '';
   if (!list || !list.length) {
-    g.innerHTML = '<div class="mm-empty">暂无自定义模型<br>点击下方添加你自己的 AI</div>';
+    g.innerHTML = '<div class="mm-empty">暂无自定义模型<br>点击下方添加你自己的模型</div>';
     return;
   }
   list.forEach((m) => {

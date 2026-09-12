@@ -145,7 +145,7 @@ contextBridge.exposeInMainWorld('api', {
   fsStat: (p) => ipcRenderer.invoke('fs:stat', p),
   pathJoin: (...args) => args.join('/').replace(/\\/g, '/'),
 
-  // ===== AI 对话（密钥只在主进程，渲染层只发送对话内容）=====
+  // ===== 智能助手对话（密钥只在主进程，渲染层只发送对话内容）=====
   // 流式：主进程通过事件 ai:chunk / ai:done 回传，渲染层永不接触密钥 / 地址 / 模型名
   aiChat: (payload, onChunk, onDone) => {
     const reqId = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
