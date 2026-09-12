@@ -1,6 +1,6 @@
 {
   "name": "biligrab",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "B 站 / 抖音 / 网易云音乐下载器（Electron 桌面应用）",
   "main": "src/main.js",
   "scripts": {
