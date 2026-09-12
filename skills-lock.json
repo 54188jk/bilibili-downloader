@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "qiaomu-design": {
+      "source": "joeseesun/qiaomu-design",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "3f3cfddf202e5e63a20e9dbce18d7fbca843a78f7104208b2b6f7ad2b35c0c23"
+    }
+  }
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self'" />
+  <title>截图</title>
+  <style>
+    html,body{margin:0;padding:0;overflow:hidden;background:transparent;cursor:crosshair;user-select:none;}
+    #canvas{position:fixed;top:0;left:0;}
+    .hint{
+      position:fixed;top:14px;left:50%;transform:translateX(-50%);
+      padding:6px 14px;border-radius:999px;font:500 12px/1.6 system-ui,"Segoe UI",sans-serif;color:#fff;
+      background:rgba(10,12,20,.78);box-shadow:0 4px 16px rgba(0,0,0,.35);white-space:nowrap;pointer-events:none;z-index:9;
+    }
+    .sel{position:fixed;border:1px solid #2fa89e;background:rgba(47,168,158,.14);display:none;z-index:5;pointer-events:none;}
+    .size{
+      position:fixed;padding:2px 8px;border-radius:6px;font:600 11px/1.5 system-ui;color:#fff;
+      background:rgba(16,18,28,.85);z-index:8;pointer-events:none;display:none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="hint">拖动选择截图区域 · 回车/双击 确认 · Esc 取消</div>
+  <div class="sel" id="sel"></div>
+  <div class="size" id="size"></div>
+  <script src="overlay.js"></script>
+</body>
+</html>

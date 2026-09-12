@@ -1,0 +1,543 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https: data: http: file:; media-src https: data: http: blob:; frame-src https: http:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src http: https:" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BiliGrab</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="window win-rise">
+
+  <!-- macOS 工具栏：交通灯 + 标题 + 操作 -->
+  <header class="titlebar">
+    <div class="traffic">
+      <button class="tl close" id="winClose" title="关闭"><svg width="6" height="6" viewBox="0 0 6 6"><path d="M1 1l4 4M5 1l-4 4" stroke="#4A0000" stroke-width="1.1" stroke-linecap="round"/></svg></button>
+      <button class="tl min" id="winMin" title="最小化"><svg width="6" height="2" viewBox="0 0 6 2"><path d="M1 1h4" stroke="#8A5200" stroke-width="1.1" stroke-linecap="round"/></svg></button>
+      <button class="tl zoom" id="winMax" title="缩放"><svg width="6" height="6" viewBox="0 0 6 6"><path d="M1 5V1h4" stroke="#005E22" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="brand-mark" id="brandMark" title="当前平台：B站">
+      <svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5.014 8.764V5.236c0-.408.474-.666.86-.468l3.441 1.765a.515.515 0 0 1 0 .934l-3.44 1.765c-.387.198-.861-.06-.861-.468M.61 6.139a6.5 6.5 0 0 0 0 1.593m2.505-5.933a6.5 6.5 0 0 1 1.38-.797M1.068 4.43a6.5 6.5 0 0 1 .796-1.38"/><path d="M7.012.5c3.55 0 6.427 2.91 6.427 6.5s-2.877 6.5-6.427 6.5c-2.446 0-4.573-1.382-5.659-3.416"/></g></svg>
+    </div>
+    <div class="tb-title">
+      BiliGrab <span class="ver" id="appVersion">v1.0.0</span>
+    </div>
+    <div class="tb-actions">
+      <button class="tb-btn" id="openBiliBtn" title="打开 B 站"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9.25.5 2.5 2.5-2.5 2.5"/><path d="M12.25 8.25A5.25 5.25 0 1 1 7 3h4.75"/></g></svg></button>
+      <button class="tb-btn" id="lyricsBtn" title="桌面歌词"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.5V1.5h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-9z"/><path d="M2.5 4.5h11M5 1.5l-1 3M8.5 1.5l-1 3M12 1.5l-1 3"/></g></svg></button>
+      <button class="tb-btn" id="themeBtn" title="切换深色 / 浅色">
+        <svg class="ic icon-sun" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1.6M7 11.4V13M13 7h-1.6M2.6 7H1M11.2 2.8l-1.1 1.1M3.9 11.2l-1.1 1.1M11.2 11.2l-1.1-1.1M3.9 2.8 2.8 3.9"/></g></svg>
+        <svg class="ic icon-moon" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12.54 8.45a5.5 5.5 0 0 1-7.09-7.09 5.5 5.5 0 1 0 7.09 7.09z"/></g></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="user" id="userBox" title="点击登录 / 切换账号">
+        <img class="avatar" id="userAvatar" alt="头像" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='68'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23007AFF'/%3E%3Cstop offset='1' stop-color='%2364D2FF'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='68' height='68' rx='34' fill='url(%23g)'/%3E%3Ccircle cx='34' cy='26' r='12' fill='rgba(255,255,255,.92)'/%3E%3Cpath d='M10 62c4-14 15-20 24-20s20 6 24 20' fill='rgba(255,255,255,.92)'/%3E%3C/svg%3E">
+        <div class="u-info">
+          <div class="u-name" id="userName">未登录</div>
+          <div class="u-sub" id="userSub">点击登录 B 站解锁高画质</div>
+        </div>
+        <button class="u-logout" id="logoutBtn" title="退出登录" style="display:none"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M9.5 10.5v2a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v2M6.5 7h7m-2-2 2 2-2 2"/></svg></button>
+      </div>
+
+      <div class="side-group">
+        <div class="side-label">下载</div>
+        <button class="side-item active" data-view="bili"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5.014 8.764V5.236c0-.408.474-.666.86-.468l3.441 1.765a.515.515 0 0 1 0 .934l-3.44 1.765c-.387.198-.861-.06-.861-.468M.61 6.139a6.5 6.5 0 0 0 0 1.593m2.505-5.933a6.5 6.5 0 0 1 1.38-.797M1.068 4.43a6.5 6.5 0 0 1 .796-1.38"/><path d="M7.012.5c3.55 0 6.427 2.91 6.427 6.5s-2.877 6.5-6.427 6.5c-2.446 0-4.573-1.382-5.659-3.416"/></g></svg>B站</button>
+        <button class="side-item" data-view="douyin"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.42a2 2 0 1 0 0-4 2 2 0 0 0 0 4m9-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/><path d="M13.5 8.92V1.08a.5.5 0 0 0-.63-.48l-8 2.22a.5.5 0 0 0-.37.48v8.12m0-5.5 9-2.5"/></g></svg>抖音</button>
+        <button class="side-item" data-view="kuaishou"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 12.5V1.5a.5.5 0 0 1 .85-.37l8 7a.5.5 0 0 1 0 .74l-8 7a.5.5 0 0 1-.85-.37"/></svg>快手</button>
+        <button class="side-item" data-view="music"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.25 13.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/><path d="M6.75 11V.5a5.5 5.5 0 0 1 5.5 5.5"/></g></svg>音乐</button>
+        <button class="side-item" data-view="movie"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.5V1.5h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-9z"/><path d="M2.5 4.5h11M5 1.5l-1 3M8.5 1.5l-1 3M12 1.5l-1 3"/></g><path d="M6 6.2v2.6l2.3-1.3z" fill="currentColor" stroke="none"/></svg>影视</button>
+        <button class="side-item" data-view="uc"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 .5 1.5 3.5v7L7 13.5l5.5-3v-7z"/><path d="M7 .5v13M1.5 3.5 12.5 10.5M12.5 3.5 1.5 10.5"/></g></svg>UC</button>
+      </div>
+      <div class="side-group">
+        <div class="side-label">管理</div>
+        <button class="side-item" data-view="history"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13 7A6 6 0 1 1 7 1a6 6 0 0 1 6 6z"/><path d="M7 3.5V7l2.5 1.5"/></g></svg>下载历史</button>
+        <button class="side-item" data-view="settings"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2"/><path d="M7 1.2v1.8M7 11v1.8M1.2 7h1.8M11 7h1.8M2.9 2.9l1.3 1.3M9.8 9.8l1.3 1.3M11.1 2.9 9.8 4.2M4.2 9.8l-1.3 1.3"/></g></svg>设置</button>
+      </div>
+      <div class="side-group">
+        <div class="side-label">智能</div>
+        <button class="side-item" data-view="ai"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/><path d="M12 8l1.2 2.4L15.6 12l-2.4 1.2L12 15.6l-1.2-2.4L8.4 12l2.4-1.2z" fill="currentColor" stroke="none"/></svg>AI 助手</button>
+        <button class="side-item" data-view="models"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1z"/><circle cx="12" cy="12" r="9"/></svg>模型管理</button>
+        <button class="side-item" data-view="messages"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>消息</button>
+      </div>
+      <div class="side-foot"><span class="d" id="sideDot"></span><span id="sideFootText">初始化中…</span></div>
+    </aside>
+
+    <!-- 内容区 -->
+    <main class="content">
+
+      <!-- ===== B 站 ===== -->
+      <section class="view active" id="view-bili">
+        <div class="view-head"><h1>B站下载</h1><p>粘贴链接或 BV 号，多行批量解析，选画质一键下载</p></div>
+        <div class="grid2">
+          <div class="card">
+            <div class="card-head"><h2>输入与解析</h2><span class="card-sub">Ctrl + Enter 快速解析</span></div>
+            <label class="label">B 站链接 / BV 号（支持多行，一行一个）</label>
+            <div class="row">
+              <div class="field">
+                <span class="f-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="m6 3 1.464-1.464a3.536 3.536 0 0 1 5 5L11 8m-3 3-1.464 1.465a3.536 3.536 0 0 1-5-5L3 6m6-1L5 9"/></svg></span>
+                <textarea id="biliInput" spellcheck="false" placeholder="粘贴链接或 BV 号，每行一个&#10;支持：视频 / 图片动态（opus）&#10;https://www.bilibili.com/video/BVxxxxxx"></textarea>
+              </div>
+              <button class="btn btn-primary" id="biliParseBtn" style="align-self:stretch;padding:0 20px">解析全部</button>
+            </div>
+            <div class="hint">支持多行批量解析：视频（BV 号 / 链接）与图片动态（opus / read）</div>
+
+            <div id="biliResults" class="task-list" style="margin-top:10px"></div>
+
+            <div class="video-card hidden" id="biliVideoCard">
+              <div class="video-cover" id="biliCoverBox">
+                <img id="biliCover" alt="封面" src="">
+                <div class="cover-overlay"><span class="dur" id="biliDuration">--:--</span></div>
+                <div class="play-hint"><svg viewBox="0 0 14 14" fill="none"><path d="M4 2.5v9l7.5-4.5z" fill="currentColor"/></svg></div>
+              </div>
+              <div class="video-info">
+                <div class="video-title" id="biliTitle">—</div>
+                <div class="video-meta">
+                  <span class="m"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13.18 13.5a6.49 6.49 0 0 0-12.36 0z"/><path d="M7 9A4.232 4.232 0 1 0 7 .536 4.232 4.232 0 0 0 7 9"/></g></svg><span id="biliAuthor">—</span></span>
+                  <span class="m mono" id="biliBvid">—</span>
+                </div>
+                <div class="stats">
+                  <div class="stat"><span id="statView">0</span><label>播放</label></div>
+                  <div class="stat"><span id="statDanmaku">0</span><label>弹幕</label></div>
+                  <div class="stat"><span id="statLike">0</span><label>点赞</label></div>
+                  <div class="stat"><span id="statCoin">0</span><label>投币</label></div>
+                  <div class="stat"><span id="statFav">0</span><label>收藏</label></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="savedir">
+              <label class="label">保存目录</label>
+              <div class="savedir-row">
+                <div class="dir-display" id="saveDirDisplay">加载中…</div>
+                <button class="btn btn-gray" id="pickDirBtn">选择目录</button>
+                <button class="btn btn-gray" id="openDirBtn">打开目录</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>画质与下载</h2><span class="card-sub"><span class="dot dot-wait" id="ffmpegDot"></span><span id="ffmpegText">检测 ffmpeg…</span></span></div>
+            <label class="label">选择画质</label>
+            <div class="seg" id="biliQuality" style="flex-wrap:wrap"><button class="active" data-qn="0">解析后可用</button></div>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="dlVideoBtn"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/><path d="M7 13.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13"/></g></svg>下载视频（mp4）</button>
+              <button class="btn btn-pink" id="dlAudioBtn"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.42a2 2 0 1 0 0-4 2 2 0 0 0 0 4m9-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/><path d="M13.5 8.92V1.08a.5.5 0 0 0-.63-.48l-8 2.22a.5.5 0 0 0-.37.48v8.12m0-5.5 9-2.5"/></g></svg>下载音频（mp3）</button>
+            </div>
+            <div class="btn-row" style="margin-top:8px">
+              <button class="btn btn-gray btn-block" id="dlVideoOnlyBtn"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M3.5 6.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6m7 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4M10 9H4.5a1 1 0 0 0-1 1v2.5a1 1 0 0 0 1 1H10a1 1 0 0 0 1-1V10a1 1 0 0 0-1-1m3.5 1v2.5"/></svg>仅下载视频流（无声）</button>
+            </div>
+
+            <div class="card-head" style="margin:20px 0 0;border-top:.5px solid var(--separator);padding-top:16px">
+              <h2>下载任务</h2>
+              <button class="btn btn-ghost" id="clearTasksBtn" style="margin-left:auto">清空历史</button>
+            </div>
+            <div class="task-list" id="taskList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 抖音 ===== -->
+      <section class="view" id="view-douyin">
+        <div class="view-head"><h1>抖音下载</h1><p>粘贴分享口令或视频链接，无水印保存</p></div>
+        <div class="card">
+          <div class="card-head"><h2>输入与解析</h2><span class="card-sub">支持口令 / 链接 / 主页批量</span></div>
+          <div class="row">
+            <div class="field">
+              <span class="f-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.42a2 2 0 1 0 0-4 2 2 0 0 0 0 4m9-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/><path d="M13.5 8.92V1.08a.5.5 0 0 0-.63-.48l-8 2.22a.5.5 0 0 0-.37.48v8.12m0-5.5 9-2.5"/></g></svg></span>
+              <textarea id="dyInput" spellcheck="false" placeholder="粘贴抖音分享口令或链接，每行一个"></textarea>
+            </div>
+            <button class="btn btn-primary" id="dyParseBtn" style="align-self:stretch;padding:0 20px">解析</button>
+          </div>
+          <div id="dyResults" class="task-list" style="margin-top:12px"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="dyDownloadBtn"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/></g></svg>下载无水印视频</button>
+            <button class="btn btn-gray" id="dyAudioBtn">仅音频</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 快手 ===== -->
+      <section class="view" id="view-kuaishou">
+        <div class="view-head"><h1>快手下载</h1><p>粘贴分享链接，一键解析保存</p></div>
+        <div class="card">
+          <div class="card-head"><h2>输入与解析</h2></div>
+          <div class="row">
+            <div class="field">
+              <span class="f-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 12.5V1.5a.5.5 0 0 1 .85-.37l8 7a.5.5 0 0 1 0 .74l-8 7a.5.5 0 0 1-.85-.37"/></svg></span>
+              <textarea id="ksInput" spellcheck="false" placeholder="粘贴快手分享链接，每行一个"></textarea>
+            </div>
+            <button class="btn btn-primary" id="ksParseBtn" style="align-self:stretch;padding:0 20px">解析</button>
+          </div>
+          <div id="ksResults" class="task-list" style="margin-top:12px"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="ksDownloadBtn"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/></g></svg>下载无水印视频</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 音乐 ===== -->
+      <section class="view" id="view-music">
+        <div class="view-head"><h1>本地音乐</h1><p>网易云音乐搜索、歌单导入与无损下载</p></div>
+        <div class="card">
+          <div class="row">
+            <div class="field">
+              <span class="f-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M6 11.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11m7.5 2L10 10"/></svg></span>
+              <input id="musicSearchInput" placeholder="搜索歌曲 / 歌手（如：晴天、周杰伦）">
+            </div>
+            <button class="btn btn-primary" id="musicSearchBtn">搜索</button>
+          </div>
+
+          <div class="card-head" style="margin:18px 0 4px"><h2>正在播放</h2><span class="card-sub"><span class="dot dot-wait" id="musicDot"></span><span id="musicApiText">本地 API 未启动</span></span></div>
+          <div class="player" data-player="music">
+            <img class="cover-img" id="musicCover" alt="封面" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23d4608a'/%3E%3Cstop offset='1' stop-color='%23b45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='96' height='96' rx='12' fill='url(%23a)'/%3E%3Ccircle cx='48' cy='48' r='26' fill='rgba(20,12,10,.85)'/%3E%3Ccircle cx='48' cy='48' r='7' fill='%23f7e6c4'/%3E%3C/svg%3E">
+            <div class="p-info">
+              <div class="p-name"><span id="musicName">未在播放</span> <span class="platform-tag">音乐</span></div>
+              <div class="p-sub" id="musicSub">搜索后点击歌曲即可播放</div>
+              <div class="p-progress" id="musicProgress" data-scrub><div class="p-fill pink" id="musicFill" style="width:0%"></div><div class="p-thumb" id="musicThumb" style="left:0%"></div><div class="p-bubble" id="musicBubble">00:00</div></div>
+              <div class="p-time"><span id="musicCur">00:00</span><span id="musicDur">00:00</span></div>
+            </div>
+            <div class="p-controls">
+              <div class="p-vol"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M7 1.5 4 4H1.5v6H4l3 2.5zM10 5a3.2 3.2 0 0 1 0 4M11.8 3.2a5.8 5.8 0 0 1 0 7.6"/></svg><input type="range" class="vol-slider" id="musicVol" min="0" max="100" value="80"></div>
+              <button class="p-btn" id="musicPrev" title="上一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M11.5 2.5v9L4.5 7zM3 2.5v9"/></svg></button>
+              <label class="pp-btn" title="播放 / 暂停">
+                <input type="checkbox" id="musicPP">
+                <svg class="pp-play" viewBox="0 0 24 24"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86z"/></svg>
+                <svg class="pp-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              </label>
+              <button class="p-btn" id="musicNext" title="下一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 2.5v9L9.5 7zM11 2.5v9"/></svg></button>
+              <button class="p-btn" id="musicDownloadBtn" title="下载"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/><path d="M7 13.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13"/></g></svg></button>
+            </div>
+          </div>
+
+          <div class="card-head" style="margin:18px 0 4px"><h2>搜索结果</h2><span class="card-sub" id="musicCount">共 0 首</span></div>
+          <div id="musicList"></div>
+          <div class="btn-row" style="margin-top:16px">
+            <button class="btn btn-gray" id="musicHotBtn" style="flex:1">热门歌单</button>
+            <button class="btn btn-gray" id="musicPlaylistBtn" style="flex:1">我的歌单</button>
+            <button class="btn btn-gray" id="musicImportBtn" style="flex:1">歌单 ID 导入</button>
+            <button class="btn btn-gray" id="musicLoginBtn" style="flex:1">扫码登录网易云</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 影视 ===== -->
+      <section class="view" id="view-movie">
+        <div class="view-head"><h1>影视 · 在线观看</h1><p>搜索电影 / 剧集，在线播放与下载</p></div>
+        <div class="card">
+          <div class="row">
+            <div class="field">
+              <span class="f-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M6 11.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11m7.5 2L10 10"/></svg></span>
+              <input id="movieSearchInput" placeholder="搜索电影 / 剧集（如：流浪地球、庆余年）">
+            </div>
+            <button class="btn btn-primary" id="movieSearchBtn">搜索</button>
+          </div>
+
+          <div class="movie-stage hidden" id="movieStage"><iframe id="moviePlayer" allow="autoplay; encrypted-media; fullscreen" allowfullscreen referrerpolicy="no-referrer"></iframe></div>
+
+          <div class="card-head" style="margin:18px 0 10px"><h2>正在播放</h2><span class="card-sub"><span class="dot dot-wait" id="movieDot"></span><span id="movieStatus">未播放</span></span></div>
+          <div class="player" data-player="movie">
+            <img class="cover-img" id="movieCover" style="width:66px;height:44px;border-radius:var(--r-s)" alt="封面" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='88'%3E%3Cdefs%3E%3ClinearGradient id='d' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231e293b'/%3E%3Cstop offset='.6' stop-color='%237c2d12'/%3E%3Cstop offset='1' stop-color='%23b45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='132' height='88' rx='10' fill='url(%23d)'/%3E%3C/svg%3E">
+            <div class="p-info">
+              <div class="p-name"><span id="movieName">未在播放</span> <span class="platform-tag">影视</span></div>
+              <div class="p-sub" id="movieSub">搜索后点击影片即可解析播放</div>
+              <div class="p-progress" id="movieProgress" data-scrub><div class="p-fill blue" id="movieFill" style="width:0%"></div><div class="p-thumb" id="movieThumb" style="left:0%"></div><div class="p-bubble" id="movieBubble">00:00</div></div>
+              <div class="p-time"><span id="movieCur">00:00</span><span id="movieDur">00:00</span></div>
+            </div>
+            <div class="p-controls">
+              <button class="p-btn" id="movieBack" title="后退 10 秒"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3A4.5 4.5 0 1 1 2.7 8.5"/><path d="M7 .5 4.5 3 7 5.5"/></g></svg></button>
+              <label class="pp-btn" title="播放 / 暂停">
+                <input type="checkbox" id="moviePP">
+                <svg class="pp-play" viewBox="0 0 24 24"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86z"/></svg>
+                <svg class="pp-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+              </label>
+              <button class="p-btn" id="movieForward" title="前进 10 秒"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3a4.5 4.5 0 1 0 4.3 5.5"/><path d="M7 .5 9.5 3 7 5.5"/></g></svg></button>
+              <button class="p-btn" id="movieDownloadBtn" title="下载本集"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/><path d="M7 13.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13"/></g></svg></button>
+            </div>
+          </div>
+          <div class="ep-row" id="movieEpisodes"></div>
+          <div class="p-line"><span>解析线路</span>
+            <select id="movieLine"><option value="">线路一（自动）</option></select>
+          </div>
+
+          <div class="card-head" style="margin:18px 0 0"><h2>搜索结果</h2><span class="card-sub" id="movieCount">共 0 部</span></div>
+          <div class="movie-grid" id="movieGrid"></div>
+        </div>
+      </section>
+
+      <!-- ===== UC ===== -->
+      <section class="view" id="view-uc">
+        <div class="view-head"><h1>UC 解析</h1><p>UC 浏览器 / UC 网盘 分享链接解析与批量下载</p></div>
+        <div class="card">
+          <div class="card-head"><h2>解析分享链接</h2><span class="card-sub"><span class="dot dot-ok"></span>自动检测文件清单</span></div>
+          <div class="row">
+            <div class="field">
+              <span class="f-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="m6 3 1.464-1.464a3.536 3.536 0 0 1 5 5L11 8m-3 3-1.464 1.465a3.536 3.536 0 0 1-5-5L3 6m6-1L5 9"/></svg></span>
+              <input id="ucInput" placeholder="粘贴 UC 浏览器分享链接（形如 https://drive.uc.cn/s/xxxxxxxx?public=1）">
+            </div>
+            <button class="btn btn-primary" id="ucParseBtn">检测文件</button>
+          </div>
+
+          <div class="card-head" style="margin:18px 0 10px"><h2>文件清单</h2><span class="card-sub" id="ucMeta">尚未解析</span></div>
+          <div id="ucFiles"></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="ucDownloadAllBtn">下载全部（浏览器）</button>
+            <button class="btn btn-gray" id="ucOpenBtn">打开分享页</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 下载历史 ===== -->
+      <section class="view" id="view-history">
+        <div class="view-head"><h1>下载历史</h1><p id="historySub">最近下载的文件</p></div>
+        <div class="card" style="padding:12px 18px">
+          <div id="historyList"></div>
+          <div class="btn-row"><button class="btn btn-gray" id="historyClearBtn">清空历史</button></div>
+        </div>
+      </section>
+
+      <!-- ===== 设置 ===== -->
+      <section class="view" id="view-settings">
+        <div class="view-head"><h1>设置</h1><p>下载目录、通用与外观偏好</p></div>
+        <div class="grid2">
+          <div class="card">
+            <div class="card-head"><h2>通用</h2></div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.5V1.5h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-9z"/><path d="M2.5 4.5h11M5 1.5l-1 3M8.5 1.5l-1 3M12 1.5l-1 3"/></g></svg></div>
+              <div class="set-main"><div class="set-name">保存目录</div><div class="set-sub" id="setDirDisplay">—</div></div>
+              <button class="btn btn-gray" id="setDirBtn">选择</button>
+            </div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 13.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13"/><path d="M3.6 4.8h2M3.6 7h2M3.6 9.2h2M8.4 7h2"/></g></svg></div>
+              <div class="set-main"><div class="set-name">下载完成提示</div><div class="set-sub">任务完成时弹出提示</div></div>
+              <button class="switch on" data-key="notify"></button>
+            </div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 7A6.5 6.5 0 1 1 7 .5c3.5 0 5 3 5 3V1.5M12 4.5H8"/></g></svg></div>
+              <div class="set-main"><div class="set-name">下载完成后打开目录</div><div class="set-sub">自动在文件管理器中显示</div></div>
+              <button class="switch" data-key="openAfter"></button>
+            </div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.5V1.5h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-9z"/><path d="M2.5 4.5h11M5 1.5l-1 3M8.5 1.5l-1 3M12 1.5l-1 3"/></g></svg></div>
+              <div class="set-main"><div class="set-name">桌面歌词</div><div class="set-sub">播放音乐时显示独立歌词窗</div></div>
+              <button class="switch" data-key="lyrics"></button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h2>外观</h2></div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic icon-sun" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1.6M7 11.4V13M13 7h-1.6M2.6 7H1M11.2 2.8l-1.1 1.1M3.9 11.2l-1.1 1.1M11.2 11.2l-1.1-1.1M3.9 2.8 2.8 3.9"/></g></svg></div>
+              <div class="set-main"><div class="set-name">外观</div><div class="set-sub">跟随系统 / 浅色 / 深色</div></div>
+              <div class="seg" id="themeSeg"><button class="active" data-theme="auto">跟随系统</button><button data-theme="light">浅色</button><button data-theme="dark">深色</button></div>
+            </div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 .5 1.5 3.5v7L7 13.5l5.5-3v-7z"/><path d="M7 .5v13M1.5 3.5 12.5 10.5M12.5 3.5 1.5 10.5"/></g></svg></div>
+              <div class="set-main"><div class="set-name">应用版本</div><div class="set-sub" id="setVersion">—</div></div>
+            </div>
+            <div class="set-row">
+              <div class="set-ic"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/><path d="M7 13.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13"/></g></svg></div>
+              <div class="set-main"><div class="set-name">使用教程</div><div class="set-sub">在浏览器中打开功能说明</div></div>
+              <button class="btn btn-gray" id="tutorialBtn">打开</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== AI 助手 ===== -->
+      <section class="view" id="view-ai">
+        <div class="ai-shell">
+          <div class="chat-scroll" id="chatScroll">
+            <div class="chat-empty" id="chatEmpty">
+              <div class="ce-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.6-.8L3 21l1.9-5.7A8.38 8.38 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.38 8.38 0 0 1 21 11.5z"/><path d="M12 8l1.2 2.4L15.6 12l-2.4 1.2L12 15.6l-1.2-2.4L8.4 12l2.4-1.2z" fill="currentColor" stroke="none"/></svg></div>
+              <div>有什么可以帮你的？<br>输入框左侧可切换模型</div>
+            </div>
+          </div>
+          <div class="chat-compose">
+            <button class="model-select" id="modelSelect">
+              <span class="ms-lock"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></span>
+              <span class="ms-name" id="currentModel">auto</span>
+              <span class="ms-chev"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></span>
+            </button>
+            <div class="field compose-field">
+              <textarea id="chatInput" placeholder="给 AI 发消息…（Enter 发送，Shift+Enter 换行）"></textarea>
+            </div>
+            <button class="send-btn" id="sendBtn" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+
+            <div class="model-menu" id="modelMenu">
+              <div class="mm-sect">内置模型</div>
+              <button class="mm-opt active" data-type="builtin" data-name="auto">
+                <span class="mm-ic"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></span>
+                <span class="mm-main">
+                  <span class="mm-name">auto</span>
+                  <span class="mm-sub">由开发者托管，密钥不下发到本机</span>
+                </span>
+                <span class="mm-check"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              </button>
+              <div class="mm-sect">自定义模型</div>
+              <div id="customGroup"></div>
+              <button class="mm-add" id="addCustomBtn"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> 添加自定义模型</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 模型管理 ===== -->
+      <section class="view" id="view-models">
+        <div class="view-head">
+          <h1>模型管理</h1>
+          <p>内置模型由开发者托管；自定义模型保存在你本机，仅你可见。</p>
+        </div>
+        <div class="mm-card">
+          <div class="mm-row locked">
+            <span class="mm-ic"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/></svg></span>
+            <div class="mm-main">
+              <div class="mm-name">auto <span class="mm-tag lock">内置</span></div>
+              <div class="mm-sub">由开发者托管，密钥仅在主进程</div>
+            </div>
+          </div>
+          <div id="modelsCustomList"></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="addModelBtn2" data-ai><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg> 添加自定义模型</button>
+        </div>
+      </section>
+
+      <!-- ===== 消息（抖音私信，原生 UI + 网页版接口） ===== -->
+      <section class="view" id="view-messages">
+        <div class="view-head">
+          <h1>消息</h1>
+          <p>抖音私信会话与消息，像网页版一样查看并回复</p>
+        </div>
+
+        <!-- 未登录提示 -->
+        <div class="im-login card" id="imLoginCard">
+          <div class="im-login-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="im-login-txt">
+            <h3>登录抖音后查看私信</h3>
+            <p>需要你的抖音登录态才能读取会话与消息，扫码登录即可，凭据仅保存在本机。</p>
+          </div>
+          <button class="btn btn-primary" id="imLoginBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8-8 18-2-8-8-2z"/></svg> 扫码登录抖音</button>
+        </div>
+
+        <!-- 已登录：平台选择 + 双栏 -->
+        <div class="im-shell" id="imShell" style="display:none">
+          <div class="im-platforms">
+            <button class="im-plat active" data-plat="douyin"><svg class="ic" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.42a2 2 0 1 0 0-4 2 2 0 0 0 0 4m9-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/><path d="M13.5 8.92V1.08a.5.5 0 0 0-.63-.48l-8 2.22a.5.5 0 0 0-.37.48v8.12m0-5.5 9-2.5"/></svg> 抖音</button>
+          </div>
+
+          <div class="im-body">
+            <!-- 会话列表 -->
+            <aside class="im-list" id="imList">
+              <div class="im-list-head">
+                <span>会话</span>
+                <button class="im-refresh" id="imRefresh" title="刷新"><svg class="ic-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5"/></svg></button>
+              </div>
+              <div class="im-list-scroll" id="imConvScroll">
+                <div class="im-empty" id="imConvEmpty">点击刷新加载会话列表</div>
+              </div>
+            </aside>
+
+            <!-- 会话窗口 -->
+            <section class="im-thread" id="imThread">
+              <div class="im-thread-empty" id="imThreadEmpty">
+                <div class="im-te-ic"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+                <div>选择一个会话开始查看与回复</div>
+              </div>
+              <div class="im-thread-main" id="imThreadMain" style="display:none">
+                <div class="im-thread-head" id="imThreadHead">
+                  <img class="im-thread-av" id="imThreadAv" alt="">
+                  <div class="im-thread-name" id="imThreadName">会话</div>
+                </div>
+                <div class="im-msgs" id="imMsgs"></div>
+                <div class="im-compose">
+                  <textarea id="imInput" placeholder="输入消息，Enter 发送，Shift+Enter 换行"></textarea>
+                  <button class="send-btn" id="imSend" title="发送"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <!-- 添加自定义模型 模态框 -->
+      <div class="modal-mask" id="addModal">
+        <div class="modal">
+          <h3>添加自定义模型</h3>
+          <div class="m-sub">填入你自己的兼容 OpenAI 协议的接口。这些信息仅保存在你本机。</div>
+          <label class="label">模型名称（界面显示）</label>
+          <div class="field"><input id="cmName" placeholder="例如：我的 GPT-4o"></div>
+          <label class="label" style="margin-top:12px">API 地址（Base URL）</label>
+          <div class="field"><input id="cmBase" placeholder="https://api.openai.com/v1"></div>
+          <label class="label" style="margin-top:12px">API 密钥</label>
+          <div class="field"><input id="cmKey" type="password" placeholder="sk-..."></div>
+          <label class="label" style="margin-top:12px">模型 ID</label>
+          <div class="field"><input id="cmModel" placeholder="gpt-4o / deepseek-chat ..."></div>
+          <div class="modal-foot">
+            <button class="btn btn-gray" id="cmCancel">取消</button>
+            <button class="btn btn-primary" id="cmSave" data-ai>保存模型</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- 吸底全局播放栏 -->
+<div class="global-player">
+  <button class="gp-grip" id="gpGrip" title="拖动以移动播放栏"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
+  <div class="gp-tabs">
+    <button class="gp-tab active" data-gp="music">音乐</button>
+    <button class="gp-tab" data-gp="movie">影视</button>
+    <button class="gp-tab" data-gp="uc">UC</button>
+  </div>
+  <img class="cover-img" id="gpCover" alt="正在播放" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23d4608a'/%3E%3Cstop offset='1' stop-color='%23b45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='96' height='96' rx='12' fill='url(%23a)'/%3E%3Ccircle cx='48' cy='48' r='26' fill='rgba(20,12,10,.85)'/%3E%3Ccircle cx='48' cy='48' r='7' fill='%23f7e6c4'/%3E%3C/svg%3E">
+  <div class="p-info" style="flex:1.2">
+    <div class="p-name"><span id="gpName">未在播放</span> <span class="platform-tag" id="gpTag">音乐</span></div>
+    <div class="p-sub" id="gpSub">—</div>
+    <div class="p-progress" id="gpProgress" data-scrub><div class="p-fill pink" id="gpFill" style="width:0%"></div><div class="p-thumb" id="gpThumb" style="left:0%"></div><div class="p-bubble" id="gpBubble">00:00</div></div>
+    <div class="p-time"><span id="gpCur">00:00</span><span id="gpDur">00:00</span></div>
+  </div>
+  <div class="p-controls">
+    <button class="p-btn" id="gpPrev" title="上一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M11.5 2.5v9L4.5 7zM3 2.5v9"/></svg></button>
+    <label class="pp-btn" title="播放 / 暂停">
+      <input type="checkbox" id="gpPP">
+      <svg class="pp-play" viewBox="0 0 24 24"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86z"/></svg>
+      <svg class="pp-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    </label>
+    <button class="p-btn" id="gpNext" title="下一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 2.5v9L9.5 7zM11 2.5v9"/></svg></button>
+    <button class="p-btn" id="gpMinBtn" title="缩小播放栏"><svg class="ic-min" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M3 7h8"/></svg><svg class="ic-exp" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="display:none"><rect x="3" y="3" width="8" height="8" rx="1.2"/></svg></button>
+    <button class="p-btn" id="gpClose" title="关闭播放栏"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" d="m4 4 6 6m0-6-6 6"/></svg></button>
+  </div>
+</div>
+
+<!-- 状态栏 -->
+<div class="statusbar">
+  <span><span class="dot dot-wait" id="statusDot"></span> <span id="statusText">就绪</span></span>
+  <span class="s-sep"></span>
+  <span id="statusQueue">队列 0</span>
+  <span class="s-right">
+    <span class="s-sep"></span>
+    <span>模型 <b id="sbModel">auto</b></span>
+    <span class="s-sep"></span>
+    <span id="statusLogin">未登录</span>
+  </span>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast" style="display:none"><span class="dot dot-ok" id="toastDot"></span><span id="toastText">操作成功</span></div>
+
+<!-- Loading -->
+<div class="loading-mask hidden" id="loadingMask">处理中…</div>
+
+<audio id="musicAudio" style="display:none"></audio>
+
+<script src="renderer.js"></script>
+</body>
+</html>

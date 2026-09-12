@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+  <title>桌面歌词</title>
+  <style>
+    :root {
+      --accent: #2df4ee;
+      --accent-glow: rgba(45, 244, 238, 0.55);
+      --accent-soft: rgba(45, 244, 238, 0.35);
+      --accent-dim: rgba(45, 244, 238, 0.15);
+      --fs: 30px;
+      /* 液态玻璃核心变量 */
+      --glass-blur: 48px;
+      --glass-sat: 220%;
+      --glass-bright: 1.12;
+      --glass-bg: rgba(8, 12, 24, 0.38);
+      --glass-border: rgba(255, 255, 255, 0.18);
+      --glass-highlight: rgba(255, 255, 255, 0.25);
+      --glass-shadow: rgba(0, 0, 0, 0.5);
+      /* 折射光角度（鼠标追踪用） */
+      --light-x: 50%;
+      --light-y: 30%;
+      --refract-angle: 135deg;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: "SF Pro Display", "Segoe UI Variable", "Microsoft YaHei", system-ui, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    body { opacity: 1; }
+
+    /* ============================================
+       液态玻璃主舞台
+       ============================================ */
+    #stage {
+      position: absolute; inset: 0;
+      transition: all .4s cubic-bezier(.4, .0, .2, 1);
+    }
+
+    /* 液态玻璃卡片模式 — 完整的液态玻璃效果 */
+    body[data-bg="glass"] #stage {
+      inset: 6px;
+      background: var(--glass-bg);
+      backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+      -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat)) brightness(var(--glass-bright));
+      border: 1px solid var(--glass-border);
+      border-radius: 28px;
+      overflow: hidden;
+      /* 液态玻璃多层阴影：外投影 + 内高光 + 底部散射 */
+      box-shadow:
+        0 24px 80px -20px rgba(0, 0, 0, 0.6),
+        0 8px 32px -8px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 0 rgba(255, 255, 255, 0.05),
+        inset 1px 0 0 0 rgba(255, 255, 255, 0.08),
+        inset -1px 0 0 0 rgba(255, 255, 255, 0.06);
+    }
+
+    /* 顶部高光折射条 — 模拟光线穿过玻璃顶部的折射 */
+    body[data-bg="glass"] #stage::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 10%; right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.55) 20%,
+        rgba(255, 255, 255, 0.85) 50%,
+        rgba(255, 255, 255, 0.55) 80%,
+        transparent
+      );
+      z-index: 10;
+      pointer-events: none;
+      animation: shimmerTop 4s ease-in-out infinite;
+    }
+
+    /* 液态玻璃表面流动光斑 — 动态折射光 */
+    body[data-bg="glass"] #stage::after {
+      content: '';
+      position: absolute;
+      top: -40%; left: -20%;
+      width: 140%; height: 180%;
+      background:
+        radial-gradient(ellipse 320px 200px at var(--light-x) var(--light-y),
+          rgba(255, 255, 255, 0.12) 0%,
+          rgba(255, 255, 255, 0.04) 40%,
+          transparent 70%),
+        radial-gradient(ellipse 200px 140px at calc(100% - var(--light-x)) calc(100% - var(--light-y)),
+          var(--accent-dim) 0%,
+          transparent 60%),
+        conic-gradient(from var(--refract-angle) at var(--light-x) var(--light-y),
+          rgba(255, 200, 200, 0.04),
+          rgba(200, 255, 200, 0.04),
+          rgba(200, 200, 255, 0.06),
+          rgba(255, 255, 200, 0.04),
+          rgba(255, 200, 255, 0.04),
+          rgba(255, 200, 200, 0.04));
+      pointer-events: none;
+      z-index: 1;
+      animation: lightFlow 8s ease-in-out infinite alternate;
+      mix-blend-mode: screen;
+    }
+
+    /* 液态玻璃棱镜边缘光 — 彩虹色散 */
+    body[data-bg="glass"] #prismEdge {
+      position: absolute; inset: 0; border-radius: 28px;
+      pointer-events: none; z-index: 10;
+      opacity: 0.45;
+    }
+    body[data-bg="glass"] #prismEdge::before {
+      content: '';
+      position: absolute; inset: -1px; border-radius: 28px;
+      padding: 1.5px;
+      background: conic-gradient(
+        from calc(var(--refract-angle) + 180deg),
+        rgba(255, 100, 100, 0.6),
+        rgba(255, 200, 100, 0.5),
+        rgba(100, 255, 150, 0.5),
+        rgba(100, 200, 255, 0.6),
+        rgba(180, 100, 255, 0.5),
+        rgba(255, 100, 200, 0.5),
+        rgba(255, 100, 100, 0.6)
+      );
+      -webkit-mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      mask:
+        linear-gradient(#fff 0 0) content-box,
+        linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      animation: prismRotate 12s linear infinite;
+    }
+    /* 底部次级折射光 */
+    body[data-bg="glass"] #prismEdge::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 15%; right: 15%; height: 1px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2) 30%,
+        var(--accent-soft) 50%,
+        rgba(255, 255, 255, 0.2) 70%,
+        transparent
+      );
+      animation: shimmerBottom 5s ease-in-out infinite 1s;
+    }
+
+    /* 空状态提示 */
+    #tip {
+      position: absolute; inset: 64px 0 30px 0;
+      display: flex; align-items: center; justify-content: center; z-index: 2;
+      font-size: 15px; color: rgba(255, 255, 255, 0.45); letter-spacing: 2px;
+      transition: opacity .4s;
+    }
+
+    /* ============================================
+       顶部拖动条
+       ============================================ */
+    #dragStrip {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 64px;
+      -webkit-app-region: drag;
+      z-index: 3;
+    }
+    body[data-lock="true"] #dragStrip { -webkit-app-region: no-drag; }
+
+    /* ============================================
+       歌曲信息
+       ============================================ */
+    #meta {
+      position: absolute; top: 10px; left: 18px;
+      height: 46px; display: flex; flex-direction: column; justify-content: center;
+      gap: 3px; z-index: 4; pointer-events: none;
+      opacity: 0.92; transition: transform .3s ease, opacity .3s ease;
+    }
+    #metaTitle {
+      font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.95);
+      letter-spacing: .6px; max-width: 340px; overflow: hidden; white-space: nowrap;
+      text-overflow: ellipsis; text-shadow: 0 1px 8px rgba(0,0,0,0.3);
+    }
+    #metaArtist {
+      font-size: 11.5px; color: rgba(255, 255, 255, 0.5);
+      letter-spacing: .5px; max-width: 340px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    #lockedHint {
+      display: none; margin-top: 3px; font-size: 10.5px; font-weight: 600;
+      color: var(--accent); letter-spacing: 1px;
+    }
+    body[data-lock="true"] #lockedHint { display: inline-block; }
+
+    /* ============================================
+       控件栏 — 液态玻璃按钮
+       ============================================ */
+    #controls {
+      position: absolute; top: 10px; right: 14px;
+      display: flex; gap: 5px; z-index: 5;
+      opacity: 0; transform: translateY(-4px);
+      transition: opacity .35s cubic-bezier(.4,0,.2,1), transform .35s cubic-bezier(.4,0,.2,1);
+    }
+    body[data-hover="true"] #controls { opacity: 1; transform: translateY(0); }
+    body[data-lock="true"] #controls { opacity: 1; transform: translateY(0); }
+
+    .ctl {
+      width: 28px; height: 28px; border: none; border-radius: 10px; cursor: pointer;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.82);
+      display: flex; align-items: center; justify-content: center;
+      transition: all .25s cubic-bezier(.4,0,.2,1);
+      -webkit-app-region: no-drag;
+      backdrop-filter: blur(12px) saturate(160%);
+      -webkit-backdrop-filter: blur(12px) saturate(160%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow:
+        0 2px 8px rgba(0,0,0,0.15),
+        inset 0 1px 0 rgba(255,255,255,0.12);
+      position: relative;
+      overflow: hidden;
+    }
+    /* 按钮表面高光 */
+    .ctl::before {
+      content: '';
+      position: absolute; top: 0; left: 10%; right: 10%; height: 50%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 100%);
+      border-radius: 10px 10px 50% 50%;
+      pointer-events: none;
+    }
+    .ctl:hover {
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      transform: scale(1.1);
+      box-shadow:
+        0 4px 16px rgba(0,0,0,0.2),
+        inset 0 1px 0 rgba(255,255,255,0.18),
+        0 0 20px var(--accent-dim);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+    .ctl:active { transform: scale(0.95); }
+    .ctl svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; position: relative; z-index: 1; }
+    .ctl .glyph { font-size: 12.5px; font-weight: 700; line-height: 1; letter-spacing: 0; position: relative; z-index: 1; }
+
+    #ctlLock { color: var(--accent); }
+    body[data-lock="true"] #ctlLock {
+      background: var(--accent); color: #06222a;
+      box-shadow: 0 0 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    #ctlClose:hover {
+      background: rgba(232, 72, 84, 0.85); color: #fff;
+      box-shadow: 0 4px 16px rgba(232, 72, 84, 0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    .ctl-music { width: 32px; height: 32px; border-radius: 50%; background: rgba(255,255,255,0.08); }
+    .ctl-music:hover {
+      background: rgba(255,255,255,0.2);
+      transform: scale(1.12);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2), 0 0 24px var(--accent-dim), inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    .ctl-music svg { width: 15px; height: 15px; }
+
+    #ctlPlayPause {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), rgba(45, 244, 238, 0.7));
+      color: #06222a;
+      box-shadow: 0 4px 20px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+    #ctlPlayPause:hover {
+      transform: scale(1.14);
+      box-shadow: 0 6px 28px var(--accent-glow), 0 0 40px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,0.4);
+    }
+    #ctlPlayPause svg { width: 16px; height: 16px; stroke-width: 2; }
+
+    .sub2 { display: none; }
+    body[data-bg="glass"] .sub1 { display: none; }
+    body[data-bg="glass"] .sub2 { display: block; }
+    body[data-mode="single"] #ctlModeIcon .m3 { display: none; }
+    #ctlModeIcon .m-single { display: none; }
+    body[data-mode="single"] #ctlModeIcon .m-single { display: block; }
+    body[data-mode="single"] #ctlModeIcon .m2, body[data-mode="single"] #ctlModeIcon .m3 { display: none; }
+    body[data-mode="double"] #ctlModeIcon .m3 { display: none; }
+
+    /* ============================================
+       歌词主体
+       ============================================ */
+    #lyrics {
+      position: absolute; top: 64px; left: 0; right: 0; bottom: 30px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; z-index: 2; cursor: default;
+      -webkit-app-region: no-drag;
+      transition: opacity .4s ease;
+    }
+    body[data-lock="true"] #lyrics { cursor: default; }
+
+    .row {
+      max-width: 88%; text-align: center; white-space: nowrap; overflow: hidden;
+      transition: transform .4s cubic-bezier(.4,0,.2,1), opacity .4s ease;
+    }
+    .row.prev, .row.next {
+      font-size: max(14px, calc(var(--fs) * 0.52));
+      font-weight: 500; letter-spacing: .5px;
+      color: rgba(240, 244, 255, 0.3);
+      line-height: 1.5;
+      max-height: calc(var(--fs) * 0.75); text-overflow: ellipsis;
+    }
+    .row.next { color: rgba(240, 244, 255, 0.48); }
+    body[data-mode="single"] .row.prev, body[data-mode="single"] .row.next { display: none; }
+    body[data-mode="double"] .row.prev { display: none; }
+
+    /* ============================================
+       当前句 — 液态玻璃胶囊
+       ============================================ */
+    .row.cur {
+      font-size: var(--fs); font-weight: 700; letter-spacing: 1.2px;
+      line-height: 1.35; color: #fff;
+    }
+    #curWrap {
+      display: inline-block; position: relative;
+      padding: 10px 32px; border-radius: 28px;
+      /* 液态玻璃胶囊材质 */
+      background: linear-gradient(135deg,
+        rgba(255,255,255,0.06) 0%,
+        rgba(255,255,255,0.02) 50%,
+        rgba(255,255,255,0.05) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(24px) saturate(180%) brightness(1.08);
+      -webkit-backdrop-filter: blur(24px) saturate(180%) brightness(1.08);
+      box-shadow:
+        0 12px 40px -8px rgba(0, 0, 0, 0.4),
+        0 4px 16px -4px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+        0 0 30px var(--accent-dim);
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      transition: box-shadow .4s ease, border-color .4s ease;
+    }
+    /* 胶囊表面折射高光 */
+    #curWrap::before {
+      content: '';
+      position: absolute; top: 0; left: 8%; right: 8%; height: 45%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.15) 0%, transparent 100%);
+      border-radius: 28px 28px 50% 50%;
+      pointer-events: none;
+    }
+    /* 胶囊底部散射光 */
+    #curWrap::after {
+      content: '';
+      position: absolute; bottom: -2px; left: 20%; right: 20%; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-soft), transparent);
+      pointer-events: none;
+      opacity: 0.6;
+      animation: bottomGlow 3s ease-in-out infinite;
+    }
+
+    /* 逐字卡拉 OK 高亮 — 液态玻璃风格 */
+    .char {
+      color: rgba(255, 255, 255, 0.75);
+      transition: color .12s ease, text-shadow .2s cubic-bezier(.4,0,.2,1), transform .15s ease;
+      display: inline-block;
+    }
+    .char.on {
+      color: var(--accent);
+      text-shadow:
+        0 0 12px var(--accent-glow),
+        0 0 30px var(--accent-soft),
+        0 0 60px var(--accent-dim);
+    }
+    .char.singing {
+      color: #fff;
+      text-shadow:
+        0 0 18px var(--accent-glow),
+        0 0 40px var(--accent-soft),
+        0 0 70px var(--accent-dim);
+      transform: scale(1.04);
+    }
+
+    /* ============================================
+       进度条 — 液态玻璃
+       ============================================ */
+    #progress {
+      position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+      width: min(60%, 640px); height: 3px; border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden; z-index: 2;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    #progressBar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--accent-soft), var(--accent), var(--accent-glow));
+      box-shadow: 0 0 14px var(--accent-glow), 0 0 30px var(--accent-soft);
+      border-radius: 999px;
+      transition: width .35s linear;
+      position: relative;
+    }
+    /* 进度条头部光点 */
+    #progressBar::after {
+      content: '';
+      position: absolute; right: -2px; top: -3px;
+      width: 9px; height: 9px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-glow), 0 0 24px var(--accent-soft);
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    #progressBar[style*="width"]:not([style*="width: 0%"]):not([style*="width:0%"])::after { opacity: 1; }
+
+    #time {
+      position: absolute; right: 16px; bottom: 9px;
+      font-size: 10.5px; color: rgba(255, 255, 255, 0.42);
+      letter-spacing: .5px; font-variant-numeric: tabular-nums; z-index: 2;
+    }
+
+    /* ============================================
+       关键帧动画 — 液态玻璃子动效
+       ============================================ */
+
+    /* 顶部折射光呼吸 */
+    @keyframes shimmerTop {
+      0%, 100% { opacity: 0.6; transform: scaleX(0.9); }
+      50% { opacity: 1; transform: scaleX(1); }
+    }
+
+    /* 底部折射光呼吸 */
+    @keyframes shimmerBottom {
+      0%, 100% { opacity: 0.3; transform: scaleX(0.85); }
+      50% { opacity: 0.7; transform: scaleX(1); }
+    }
+
+    /* 表面光斑流动 */
+    @keyframes lightFlow {
+      0% { transform: translate(-2%, -3%) rotate(0deg); }
+      100% { transform: translate(2%, 3%) rotate(8deg); }
+    }
+
+    /* 棱镜边缘旋转 */
+    @keyframes prismRotate {
+      from { --refract-angle: 0deg; transform: rotate(0deg); }
+      to { --refract-angle: 360deg; transform: rotate(360deg); }
+    }
+    @property --refract-angle {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false;
+    }
+
+    /* 胶囊底部发光脉动 */
+    @keyframes bottomGlow {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.8; }
+    }
+
+    /* 歌词行入场淡入 */
+    @keyframes lyricFadeIn {
+      from { opacity: 0; transform: translateY(8px) scale(0.97); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .row.cur { animation: lyricFadeIn .35s cubic-bezier(.4,0,.2,1); }
+
+    /* ============================================
+       光晕粒子（可选装饰层）
+       ============================================ */
+    #ambientOrbs {
+      position: absolute; inset: 0; pointer-events: none; z-index: 0;
+      overflow: hidden; opacity: 0;
+      transition: opacity .6s ease;
+    }
+    body[data-bg="glass"] #ambientOrbs { opacity: 1; }
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(40px);
+      animation: orbFloat 10s ease-in-out infinite alternate;
+    }
+    .orb-1 {
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, var(--accent-dim), transparent 70%);
+      top: 20%; left: 10%;
+      animation-delay: 0s; animation-duration: 12s;
+    }
+    .orb-2 {
+      width: 160px; height: 160px;
+      background: radial-gradient(circle, rgba(140, 120, 255, 0.08), transparent 70%);
+      bottom: 15%; right: 15%;
+      animation-delay: -4s; animation-duration: 14s;
+    }
+    .orb-3 {
+      width: 120px; height: 120px;
+      background: radial-gradient(circle, rgba(255, 160, 200, 0.06), transparent 70%);
+      top: 60%; left: 50%;
+      animation-delay: -8s; animation-duration: 16s;
+    }
+    @keyframes orbFloat {
+      0% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(20px, -15px) scale(1.1); }
+      66% { transform: translate(-10px, 10px) scale(0.95); }
+      100% { transform: translate(15px, -5px) scale(1.05); }
+    }
+  </style>
+</head>
+<body data-lock="false" data-hover="false" data-bg="transparent" data-mode="triple" data-theme="teal">
+  <div id="stage">
+    <!-- 液态玻璃装饰层 -->
+    <div id="ambientOrbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
+    <div id="prismEdge"></div>
+    <div id="dragStrip" title="按住可拖动"></div>
+
+    <div id="meta">
+      <div id="metaTitle">—</div>
+      <div id="metaArtist">—</div>
+      <span id="lockedHint">已锁定 · 悬停顶部解锁</span>
+    </div>
+
+    <div id="controls">
+      <button class="ctl ctl-music" id="ctlPrev" title="上一曲">
+        <svg viewBox="0 0 16 16"><path d="M3 3v10M13 3l-7 5 7 5z"/></svg>
+      </button>
+      <button class="ctl ctl-music" id="ctlPlayPause" title="播放 / 暂停">
+        <svg viewBox="0 0 16 16" id="playPauseIcon"><path d="M4 2.5v11M12 2.5l-7 5.5 7 5.5z"/></svg>
+      </button>
+      <button class="ctl ctl-music" id="ctlNext" title="下一曲">
+        <svg viewBox="0 0 16 16"><path d="M13 3v10M3 3l7 5-7 5z"/></svg>
+      </button>
+      <button class="ctl" id="ctlLock" title="锁定 / 解锁">
+        <svg viewBox="0 0 16 16" id="lockIcon"><path d="M4.5 7V5a3.5 3.5 0 0 1 7 0v2"/><rect x="3.5" y="7" width="9" height="6" rx="1.4"/></svg>
+      </button>
+      <button class="ctl" id="ctlFontMinus" title="字号减小"><span class="glyph">A−</span></button>
+      <button class="ctl" id="ctlFontPlus" title="字号增大"><span class="glyph">A+</span></button>
+      <button class="ctl" id="ctlBg" title="切换背景">
+        <svg class="sub1" viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.2"/></svg>
+        <svg class="sub2" viewBox="0 0 16 16"><path d="M2.5 11.5 6 8l2.2 2.3M9 8.2 11 6l2.5 3.2"/><circle cx="11.5" cy="4.2" r="1.1" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="ctl" id="ctlMode" title="显示模式">
+        <svg viewBox="0 0 16 16" id="ctlModeIcon">
+          <path class="m-single" d="M3 8h10"/>
+          <path class="m2" d="M2.5 5.2h11M3.7 10.8h8.6"/>
+          <path class="m3" d="M2.5 3.6h11M3.5 8h9M2.5 12.4h11"/>
+        </svg>
+      </button>
+      <button class="ctl" id="ctlClose" title="关闭桌面歌词">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </div>
+
+    <div id="tip">播放歌曲后，在这行字的位置显示桌面歌词</div>
+
+    <div id="lyrics">
+      <div class="row prev" id="linePrev"></div>
+      <div class="row cur" id="lineCur"></div>
+      <div class="row next" id="lineNext"></div>
+    </div>
+
+    <div id="progress"><div id="progressBar"></div></div>
+    <div id="time">0:00 / 0:00</div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const body = document.body;
+    const stage = document.getElementById('stage');
+
+    // ===== 鼠标追踪：液态玻璃折射光跟随鼠标 =====
+    document.addEventListener('mousemove', (e) => {
+      if (!stage) return;
+      const rect = stage.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+      const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+      stage.style.setProperty('--light-x', x + '%');
+      stage.style.setProperty('--light-y', y + '%');
+      // 折射角度随鼠标位置变化
+      const angle = Math.atan2(e.clientY - rect.top - rect.height / 2, e.clientX - rect.left - rect.width / 2) * 180 / Math.PI;
+      stage.style.setProperty('--refract-angle', (angle + 180) + 'deg');
+    });
+
+    // ===== 悬停维护：鼠标进入/离开时显示/隐藏控件 =====
+    let hoverTimer = null;
+    function showControls() {
+      body.setAttribute('data-hover', 'true');
+      if (hoverTimer) clearTimeout(hoverTimer);
+    }
+    function hideControlsDelayed() {
+      if (hoverTimer) clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(() => {
+        if (!settings.locked) body.setAttribute('data-hover', 'false');
+      }, 1500);
+    }
+    document.addEventListener('mouseenter', showControls);
+    document.addEventListener('mousemove', showControls);
+    document.addEventListener('mouseleave', hideControlsDelayed);
+    if (stage) {
+      stage.addEventListener('mouseenter', showControls);
+      stage.addEventListener('mouseleave', hideControlsDelayed);
+    }
+
+    // ===== 设置（本地持久化） =====
+    const THEMES = {
+      teal:  { c: '#2df4ee', glow: 'rgba(45,244,238,.55)',  soft: 'rgba(45,244,238,.35)'  },
+      pink:  { c: '#ff6b9d', glow: 'rgba(255,107,157,.55)', soft: 'rgba(255,107,157,.35)' },
+      gold:  { c: '#ffc861', glow: 'rgba(255,200,97,.55)',  soft: 'rgba(255,200,97,.35)'  },
+      blue:  { c: '#6ea8ff', glow: 'rgba(110,168,255,.55)', soft: 'rgba(110,168,255,.35)' },
+      green: { c: '#7ce7a0', glow: 'rgba(124,231,160,.55)', soft: 'rgba(124,231,160,.35)' },
+      white: { c: '#ffffff', glow: 'rgba(255,255,255,.5)',  soft: 'rgba(255,255,255,.3)'  },
+    };
+    const DEFAULT_SETTINGS = { locked: false, fontSize: 30, theme: 'teal', bg: 'transparent', mode: 'triple', opacity: 1 };
+    let settings = loadSettings();
+
+    function loadSettings() {
+      try {
+        const raw = JSON.parse(localStorage.getItem('dl-settings') || '{}');
+        const s = Object.assign({}, DEFAULT_SETTINGS, raw);
+        s.fontSize = Math.max(20, Math.min(42, s.fontSize || 30));
+        if (!THEMES[s.theme]) s.theme = 'teal';
+        return s;
+      } catch (_) { return Object.assign({}, DEFAULT_SETTINGS); }
+    }
+    function saveSettings() {
+      try { localStorage.setItem('dl-settings', JSON.stringify(settings)); } catch (_) {}
+    }
+    function applySettings() {
+      const t = THEMES[settings.theme];
+      document.documentElement.style.setProperty('--accent', t.c);
+      document.documentElement.style.setProperty('--accent-glow', t.glow);
+      document.documentElement.style.setProperty('--accent-soft', t.soft);
+      document.documentElement.style.setProperty('--accent-dim', t.soft.replace(/[\d.]+\)$/, '0.12)'));
+      document.documentElement.style.setProperty('--fs', settings.fontSize + 'px');
+      body.setAttribute('data-theme', settings.theme);
+      body.setAttribute('data-lock', String(settings.locked));
+      body.setAttribute('data-bg', settings.bg);
+      body.setAttribute('data-mode', settings.mode);
+      body.style.opacity = settings.opacity;
+    }
+
+    function setLocked(v) {
+      settings.locked = !!v;
+      saveSettings();
+      applySettings();
+      updateClickThrough();
+    }
+
+    // ===== 点击穿透 =====
+    let clickThroughActive = false;
+    function updateClickThrough() {
+      if (settings.locked && !clickThroughActive) {
+        window.dl.setIgnoreMouseEvents(true);
+        clickThroughActive = true;
+      } else if (!settings.locked && clickThroughActive) {
+        window.dl.setIgnoreMouseEvents(false);
+        clickThroughActive = false;
+      }
+    }
+
+    // ===== 歌词数据 =====
+    let song = null;
+    let cur = { time: 0, playing: false, duration: 0 };
+    let curIdx = -1;
+    let curChars = null;
+
+    function fmt(s) {
+      if (!isFinite(s) || s <= 0) return '0:00';
+      const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+      return m + ':' + String(sec).padStart(2, '0');
+    }
+
+    function renderMeta() {
+      if (song) {
+        $('metaTitle').textContent = song.title || '未知歌曲';
+        $('metaArtist').textContent = song.artist || '未知歌手';
+        $('tip').style.opacity = '0';
+      } else {
+        $('metaTitle').textContent = '—';
+        $('metaArtist').textContent = '—';
+        $('tip').style.opacity = '1';
+      }
+    }
+
+    function renderLines() {
+      if (!song || !song.lines || !song.lines.length) {
+        $('linePrev').textContent = '';
+        $('lineCur').textContent = '';
+        $('lineNext').textContent = '';
+        curChars = null;
+        return;
+      }
+      const lines = song.lines;
+      const prev = curIdx - 1 >= 0 ? lines[curIdx - 1].text : '';
+      const curLine = curIdx >= 0 ? lines[curIdx] : null;
+      const next = curIdx + 1 < lines.length ? lines[curIdx + 1].text : '';
+
+      $('linePrev').textContent = prev;
+      $('lineNext').textContent = next;
+
+      const curEl = $('lineCur');
+      if (curLine && curLine.chars && curLine.chars.length) {
+        curChars = curLine.chars;
+        curEl.textContent = '';
+        const wrap = document.createElement('span');
+        for (let i = 0; i < curLine.chars.length; i++) {
+          const sp = document.createElement('span');
+          sp.className = 'char';
+          sp.textContent = (curLine.text[i] === undefined ? '' : curLine.text[i]);
+          wrap.appendChild(sp);
+        }
+        curEl.appendChild(wrap);
+        updateChars();
+      } else {
+        curChars = null;
+        curEl.textContent = curLine ? curLine.text : '';
+      }
+    }
+
+    function updateChars() {
+      if (!curChars || curIdx < 0) return;
+      const lineTime = song.lines[curIdx].time;
+      const elapsed = cur.time - lineTime;
+      const spans = $('lineCur').querySelectorAll('.char');
+      for (let i = 0; i < spans.length && i < curChars.length; i++) {
+        const c = curChars[i];
+        const start = c.start || 0;
+        const dur = c.dur || 0.06;
+        spans[i].classList.toggle('on', elapsed >= start);
+        spans[i].classList.toggle('singing', elapsed >= start && elapsed < start + dur);
+      }
+    }
+
+    function seekLine() {
+      if (!song || !song.lines || !song.lines.length) {
+        curIdx = -1; return;
+      }
+      let idx = -1;
+      for (let i = 0; i < song.lines.length; i++) {
+        if (cur.time >= song.lines[i].time) idx = i; else break;
+      }
+      if (idx !== curIdx) { curIdx = idx; renderLines(); }
+      else updateChars();
+    }
+
+    function renderProgress() {
+      const p = cur.duration > 0 ? Math.min(1, cur.time / cur.duration) * 100 : 0;
+      $('progressBar').style.width = p + '%';
+      $('time').textContent = fmt(cur.time) + ' / ' + fmt(cur.duration);
+    }
+
+    function onTick(p) {
+      cur.time = p.time || 0;
+      cur.playing = !!p.playing;
+      cur.duration = p.duration || cur.duration;
+      seekLine();
+      renderProgress();
+      const icon = $('playPauseIcon');
+      if (icon) {
+        icon.innerHTML = cur.playing
+          ? '<rect x="4" y="3" width="3" height="10" rx="0.8"/><rect x="9" y="3" width="3" height="10" rx="0.8"/>'
+          : '<path d="M4 2.5v11M12 2.5l-7 5.5 7 5.5z"/>';
+      }
+    }
+
+    // ===== 主窗口推送 =====
+    window.dl.onData((p) => {
+      song = { title: p.title || '', artist: p.artist || '', lines: p.lines || [] };
+      curIdx = -1;
+      renderMeta();
+      seekLine();
+      renderProgress();
+    });
+    window.dl.onTick(onTick);
+
+    // ===== 命令处理 =====
+    window.dl.onCmd((cmd) => {
+      switch (cmd.type) {
+        case 'lock': setLocked(!settings.locked); break;
+        case 'font':
+          settings.fontSize = Math.max(20, Math.min(42, settings.fontSize + (cmd.value || 0)));
+          saveSettings(); applySettings();
+          break;
+        case 'theme': if (THEMES[cmd.value]) { settings.theme = cmd.value; saveSettings(); applySettings(); } break;
+        case 'bg': if (cmd.value === 'glass' || cmd.value === 'transparent') { settings.bg = cmd.value; saveSettings(); applySettings(); } break;
+        case 'mode': if (['single', 'double', 'triple'].includes(cmd.value)) { settings.mode = cmd.value; saveSettings(); applySettings(); renderLines(); } break;
+        case 'opacity': { const v = parseFloat(cmd.value); if (v > 0 && v <= 1) { settings.opacity = v; saveSettings(); applySettings(); } break; }
+        case 'resetPos': window.dl.resetPos(); break;
+        case 'close': window.dl.close(); break;
+      }
+    });
+
+    // ===== 控件栏按钮事件 =====
+    $('ctlLock').addEventListener('click', (e) => {
+      e.stopPropagation(); e.preventDefault();
+      setLocked(!settings.locked);
+    });
+
+    const controls = document.getElementById('controls');
+    let wasOverControls = false;
+    if (controls) {
+      document.addEventListener('mousemove', (e) => {
+        if (!clickThroughActive) return;
+        const rect = controls.getBoundingClientRect();
+        const overControls = e.clientX >= rect.left && e.clientX <= rect.right &&
+                             e.clientY >= rect.top && e.clientY <= rect.bottom;
+        if (overControls && !wasOverControls) {
+          window.dl.setIgnoreMouseEvents(false);
+        } else if (!overControls && wasOverControls) {
+          window.dl.setIgnoreMouseEvents(true);
+        }
+        wasOverControls = overControls;
+      });
+    }
+
+    $('ctlFontMinus').addEventListener('click', () => {
+      settings.fontSize = Math.max(20, settings.fontSize - 2);
+      saveSettings(); applySettings();
+    });
+    $('ctlFontPlus').addEventListener('click', () => {
+      settings.fontSize = Math.min(42, settings.fontSize + 2);
+      saveSettings(); applySettings();
+    });
+    $('ctlBg').addEventListener('click', () => {
+      settings.bg = settings.bg === 'glass' ? 'transparent' : 'glass';
+      saveSettings(); applySettings();
+    });
+    $('ctlMode').addEventListener('click', () => {
+      const order = ['triple', 'double', 'single'];
+      settings.mode = order[(order.indexOf(settings.mode) + 1) % order.length];
+      saveSettings(); applySettings(); renderLines();
+    });
+    $('ctlClose').addEventListener('click', () => window.dl.close());
+
+    $('ctlPrev').addEventListener('click', (e) => { e.stopPropagation(); window.dl.musicControl('prev'); });
+    $('ctlPlayPause').addEventListener('click', (e) => { e.stopPropagation(); window.dl.musicControl('play'); });
+    $('ctlNext').addEventListener('click', (e) => { e.stopPropagation(); window.dl.musicControl('next'); });
+
+    window.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      window.dl.showMenu({
+        locked: settings.locked, fontSize: settings.fontSize,
+        bg: settings.bg, mode: settings.mode, theme: settings.theme, opacity: settings.opacity,
+      });
+    });
+
+    window.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.ctl')) return;
+      setLocked(true);
+    });
+
+    // ===== 初始化 =====
+    applySettings();
+    renderMeta();
+    renderProgress();
+    body.setAttribute('data-hover', 'true');
+    setTimeout(() => {
+      if (!settings.locked) body.setAttribute('data-hover', 'false');
+      updateClickThrough();
+    }, 3000);
+  </script>
+</body>
+</html>

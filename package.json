@@ -1,0 +1,98 @@
+{
+  "name": "biligrab",
+  "version": "1.4.1",
+  "description": "B 站 / 抖音 / 网易云音乐下载器（Electron 桌面应用）",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --enable-logging",
+    "pack": "electron-builder --dir",
+    "build": "electron-builder",
+    "build:portable": "electron-builder --win portable"
+  },
+  "keywords": [
+    "bilibili",
+    "downloader",
+    "electron"
+  ],
+  "author": "BiliGrab",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^32.3.3",
+    "electron-builder": "^25.1.8",
+    "ws": "^8.21.3"
+  },
+  "build": {
+    "appId": "com.biligrab.app",
+    "productName": "BiliGrab",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!node_modules/ffmpeg-static/**"
+    ],
+    "asarUnpack": [
+      "node_modules/tesseract.js/**",
+      "node_modules/tesseract.js/node_modules/tesseract.js-core/**"
+    ],
+    "compression": "maximum",
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
+    "afterPack": "./scripts/after-pack.cjs",
+    "extraResources": [
+      {
+        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+        "to": "ffmpeg.exe"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": true,
+      "signtoolOptions": {
+        "certificateFile": "build/biligrab-codesign.pfx",
+        "certificatePassword": "BiliGrab2026!",
+        "certificateSubjectName": "BiliGrab Software",
+        "signingHashAlgorithms": [
+          "sha256"
+        ],
+        "rfc3161TimeStampServer": "http://timestamp.digicert.com"
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "BiliGrab",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "differentialPackage": false
+    },
+    "portable": {
+      "artifactName": "BiliGrab-portable.exe"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.video"
+    }
+  },
+  "optionalDependencies": {
+    "ffmpeg-static": "^5.3.0"
+  },
+  "dependencies": {
+    "NeteaseCloudMusicApi": "^4.32.0",
+    "tesseract.js": "^7.0.0"
+  }
+}

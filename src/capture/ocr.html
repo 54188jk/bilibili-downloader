@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'self'" />
+  <title>OCR 识别</title>
+  <style>
+    *{box-sizing:border-box;}
+    html,body{margin:0;padding:0;height:100%;background:#14161f;color:#e6e8f0;font:13px/1.5 system-ui,"Segoe UI","Microsoft YaHei",sans-serif;overflow:hidden;user-select:none;}
+    .titlebar{height:44px;display:flex;align-items:center;padding:0 14px;gap:10px;border-bottom:1px solid rgba(255,255,255,.07);background:rgba(255,255,255,.02);}
+    .tt{font-weight:700;font-size:14px;}
+    .spacer{flex:1;}
+    .tb{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);}
+    .field{display:flex;align-items:center;gap:6px;font-size:12px;color:#9aa1b5;}
+    .btn{border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#e6e8f0;padding:6px 14px;cursor:pointer;font-size:12px;transition:.13s;}
+    .btn:hover{background:rgba(255,255,255,.1);}
+    .btn.primary{background:linear-gradient(135deg,#fb7299,#fc5c7d);border:none;color:#fff;font-weight:600;}
+    .btn.primary:hover{filter:brightness(1.05);}
+    .sel{padding:4px 8px;border-radius:6px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:#e6e8f0;font-size:12px;min-width:140px;}
+    .canvaswrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:16px;background:#0d0f16;}
+    canvas{max-width:100%;background:#fff;border-radius:4px;box-shadow:0 10px 40px rgba(0,0,0,.5);}
+    .result{height:180px;overflow:auto;padding:12px 16px;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02);}
+    .result pre{margin:0;white-space:pre-wrap;word-break:break-all;font:13px/1.7 "Consolas","Fira Code",monospace;color:#d4d8e8;}
+    .footer{height:48px;display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 16px;border-top:1px solid rgba(255,255,255,.06);}
+    .loading{display:none;align-items:center;gap:8px;color:#9aa1b5;font-size:12px;}
+    .spin{width:14px;height:14px;border:2px solid rgba(251,114,153,.3);border-top-color:#fb7299;border-radius:50%;animation:spin .8s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+  </style>
+</head>
+<body>
+  <div class="titlebar">
+    <span class="tt">OCR 文字识别</span>
+    <span class="spacer"></span>
+    <button class="btn" id="closeBtn">关闭</button>
+  </div>
+  <div class="tb">
+    <span class="field">语言</span>
+    <select class="sel" id="langSel">
+      <option value="chi_sim+eng">中英混合</option>
+      <option value="eng">English</option>
+      <option value="chi_sim">简体中文</option>
+      <option value="jpn">日本語</option>
+      <option value="kor">한국어</option>
+    </select>
+    <button class="btn primary" id="recBtn">识别</button>
+    <button class="btn" id="copyBtn" disabled>复制文本</button>
+    <span class="spacer"></span>
+    <div class="loading" id="loading"><div class="spin"></div><span>识别中…</span></div>
+  </div>
+  <div class="canvaswrap"><canvas id="canvas"></canvas></div>
+  <div class="result"><pre id="resultText">识别结果将显示在这里…</pre></div>
+  <div class="footer">
+    <button class="btn" id="copyBtn2" disabled>复制</button>
+    <button class="btn primary" id="recBtn2">重新识别</button>
+  </div>
+  <script src="ocr.js"></script>
+</body>
+</html>

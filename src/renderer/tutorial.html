@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https: data: http:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'; connect-src http: https:" />
+  <title>BiliGrab · 使用教程</title>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --text-1: #1a1d27;
+      --text-2: #5a6174;
+      --text-3: #8f96a3;
+      --pink: #d4608a;
+      --teal: #2fa89e;
+      --indigo: #3b82f6;
+      --green: #34a77e;
+      --border: rgba(0,0,0,0.07);
+      --shadow: 0 2px 16px -4px rgba(0,0,0,0.07);
+      --radius: 16px;
+    }
+    body.dark {
+      --bg: #0e1116;
+      --surface: rgba(22,27,36,0.92);
+      --text-1: #e8ebf0;
+      --text-2: #b1b8c4;
+      --text-3: #767e8d;
+      --pink: #d97a9f;
+      --teal: #4fb0a6;
+      --indigo: #60a5fa;
+      --green: #54a384;
+      --border: rgba(255,255,255,0.07);
+      --shadow: 0 6px 24px -12px rgba(0,0,0,0.65);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text-1);
+      line-height: 1.6;
+      overflow-x: hidden;
+      transition: background 0.4s, color 0.4s;
+    }
+
+    /* 顶部导航 */
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 32px;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    body.dark .nav { background: rgba(14,17,22,0.85); }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .nav-logo {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #c35a86, #4f8fa6);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-logo span {
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+    }
+    .nav-title {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .nav-subtitle {
+      font-size: 12px;
+      color: var(--text-3);
+    }
+
+    .theme-btn {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-2);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .theme-btn:hover { background: rgba(59,130,246,0.08); color: var(--indigo); }
+    .theme-btn svg { width: 18px; height: 18px; }
+    .theme-btn .icon-moon { display: none; }
+    body.dark .theme-btn .icon-sun { display: none; }
+    body.dark .theme-btn .icon-moon { display: block; }
+
+    /* Hero 区域 */
+    .hero {
+      text-align: center;
+      padding: 80px 32px 60px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px; left: 50%; transform: translateX(-50%);
+      width: 800px; height: 800px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(59,130,246,0.08), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-title {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+      opacity: 0;
+      transform: translateY(30px);
+      animation: fadeUp 0.8s ease forwards;
+    }
+    .hero-title span {
+      background: linear-gradient(135deg, var(--pink), var(--indigo));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-2);
+      max-width: 500px;
+      margin: 0 auto 32px;
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.8s 0.15s ease forwards;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 999px;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.2);
+      color: var(--indigo);
+      font-size: 13px;
+      font-weight: 600;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.3s ease forwards;
+    }
+
+    /* 步骤容器 */
+    .steps {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 32px 80px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    /* 单个步骤卡片 */
+    .step-card {
+      display: flex;
+      gap: 24px;
+      padding: 28px 32px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(40px);
+      transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+    }
+    .step-card.visible {
+      animation: fadeUp 0.6s ease forwards;
+    }
+
+    .step-number {
+      flex-shrink: 0;
+      width: 52px; height: 52px;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .step-card:nth-child(1) .step-number { background: linear-gradient(135deg, var(--pink), #e879a8); }
+    .step-card:nth-child(2) .step-number { background: linear-gradient(135deg, var(--teal), #40c9b8); }
+    .step-card:nth-child(3) .step-number { background: linear-gradient(135deg, var(--indigo), #60a5fa); }
+    .step-card:nth-child(4) .step-number { background: linear-gradient(135deg, var(--green), #4ade80); }
+    .step-card:nth-child(5) .step-number { background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+
+    .step-content { flex: 1; min-width: 0; }
+
+    .step-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .step-desc {
+      font-size: 14px;
+      color: var(--text-2);
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+
+    /* 动画提示框 */
+    .step-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--indigo);
+      background: rgba(59,130,246,0.06);
+      border: 1px solid rgba(59,130,246,0.15);
+    }
+    .step-hint svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* 动画演示区 */
+    .demo-area {
+      margin-top: 16px;
+      padding: 16px;
+      background: rgba(0,0,0,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+    body.dark .demo-area { background: rgba(0,0,0,0.2); }
+
+    /* 动画元素 */
+    .anim-input {
+      width: 200px;
+      height: 36px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      font-size: 12px;
+      color: var(--text-3);
+      position: relative;
+      overflow: hidden;
+    }
+    .anim-input::after {
+      content: '';
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 2px;
+      background: var(--indigo);
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+    .anim-cursor {
+      width: 1px;
+      height: 16px;
+      background: var(--text-1);
+      animation: blink 1s step-end infinite;
+    }
+
+    .anim-arrow {
+      color: var(--text-3);
+      font-size: 20px;
+      animation: bounce 1.5s ease infinite;
+    }
+    @keyframes bounce {
+      0%,100% { transform: translateX(0); }
+      50% { transform: translateX(6px); }
+    }
+
+    .anim-btn {
+      padding: 8px 20px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--teal), #40c9b8);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      cursor: default;
+      animation: pulseBtn 2s ease infinite;
+    }
+    @keyframes pulseBtn {
+      0%,100% { box-shadow: 0 0 0 0 rgba(47,168,158,0.3); }
+      50% { box-shadow: 0 0 0 8px rgba(47,168,158,0); }
+    }
+
+    .anim-card {
+      width: 160px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      animation: slideInCard 1s ease forwards;
+    }
+    @keyframes slideInCard {
+      from { opacity: 0; transform: translateY(20px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .anim-card-cover {
+      width: 100%;
+      height: 80px;
+      background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(212,96,138,0.1));
+    }
+    .anim-card-text {
+      padding: 8px 10px;
+    }
+    .anim-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-1);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .anim-card-sub {
+      font-size: 10px;
+      color: var(--text-3);
+      margin-top: 2px;
+    }
+
+    .anim-progress {
+      width: 140px;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.06);
+      overflow: hidden;
+    }
+    body.dark .anim-progress { background: rgba(255,255,255,0.08); }
+    .anim-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--pink), var(--indigo));
+      animation: progressFill 2.5s ease-in-out infinite;
+    }
+    @keyframes progressFill {
+      0% { width: 0%; }
+      50% { width: 75%; }
+      100% { width: 100%; }
+    }
+
+    .anim-quality {
+      display: flex;
+      gap: 6px;
+    }
+    .anim-q-item {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-2);
+      animation: qualityPop 0.4s ease forwards;
+      opacity: 0;
+    }
+    .anim-q-item:nth-child(1) { animation-delay: 0.2s; }
+    .anim-q-item:nth-child(2) { animation-delay: 0.4s; border-color: var(--pink); color: var(--pink); }
+    .anim-q-item:nth-child(3) { animation-delay: 0.6s; }
+
+    /* 已选画质高亮 + badge */
+    .anim-q-item.selected {
+      border-color: var(--pink);
+      color: var(--pink);
+      background: rgba(212, 96, 138, 0.08);
+      box-shadow: 0 0 0 2px rgba(212, 96, 138, 0.2);
+      transform: scale(1.04);
+      transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2), box-shadow 0.25s ease;
+    }
+    body.dark .anim-q-item.selected {
+      border-color: var(--pink);
+      background: rgba(217, 122, 159, 0.12);
+      box-shadow: 0 0 0 2px rgba(217, 122, 159, 0.3);
+    }
+    .anim-q-badge {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-2);
+      font-family: 'JetBrains Mono', monospace;
+      opacity: 0.5;
+      transition: opacity 0.25s ease;
+    }
+
+    /* Step 2 解析结果清单 */
+    .anim-result-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 280px;
+      opacity: 0;
+      transform: translateX(12px);
+      transition: width 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.3s ease, transform 0.3s ease;
+    }
+    .anim-result-list.open {
+      opacity: 1;
+      transform: translateX(0);
+      width: 280px;
+    }
+    .anim-result-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: default;
+      opacity: 0;
+      transform: translateX(10px);
+      transition: opacity 0.3s ease, transform 0.3s ease, border-color 0.2s ease, background 0.2s ease;
+    }
+    .anim-result-item.visible {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    .anim-result-item.checked {
+      border-color: rgba(52, 167, 126, 0.4);
+      background: rgba(52, 167, 126, 0.06);
+    }
+    .anim-result-cover {
+      width: 42px; height: 42px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(212,96,138,0.1));
+      flex-shrink: 0;
+    }
+    .anim-result-text { flex: 1; min-width: 0; }
+    .anim-result-title {
+      font-size: 12px; font-weight: 600; color: var(--text-1);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .anim-result-sub {
+      font-size: 10.5px; color: var(--text-3); margin-top: 2px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .anim-result-cb {
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .anim-cb-box {
+      width: 16px; height: 16px;
+      border-radius: 4px;
+      border: 1.5px solid var(--text-3);
+      background: rgba(0,0,0,0.05);
+      transition: all 0.2s ease;
+    }
+    body.dark .anim-cb-box { background: rgba(0,0,0,0.25); }
+    .anim-result-item.checked .anim-cb-box {
+      background: var(--green);
+      border-color: var(--green);
+    }
+    .anim-result-item.checked .anim-cb-box::after {
+      content: '';
+      position: absolute; left: 4px; top: 1px;
+      width: 5px; height: 9px;
+      border: solid #fff; border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+    .anim-result-item.checked .anim-result-title { color: var(--green); }
+
+    /* Step 4 目录弹出 */
+    .anim-dir-popup {
+      display: flex; flex-direction: column; gap: 12px;
+      width: 320px; opacity: 0; transform: translateY(6px);
+      transition: width 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.3s ease, transform 0.3s ease;
+    }
+    .anim-dir-popup.open {
+      opacity: 1; transform: translateY(0); width: 320px;
+    }
+    .anim-dir-current {
+      display: flex; align-items: center; gap: 10px; padding: 12px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(212,96,138,0.08), rgba(59,130,246,0.06));
+      border: 1px solid rgba(212,96,138,0.18);
+    }
+    .anim-dir-current-mark {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--pink);
+      background: rgba(212,96,138,0.1);
+    }
+    .anim-dir-current-mark svg { width: 16px; height: 16px; }
+    .anim-dir-current-text { flex: 1; min-width: 0; }
+    .anim-dir-current-label {
+      font-size: 10px; color: var(--text-3); letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 2px;
+    }
+    .anim-dir-current-path {
+      font-size: 12px; color: var(--text-1); font-weight: 600;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .anim-dir-history {
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .anim-dir-history-title {
+      font-size: 10px; color: var(--text-3); letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 4px;
+    }
+    .anim-dir-history-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      cursor: default;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.3s ease, transform 0.3s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+    .anim-dir-history-item.visible {
+      opacity: 1; transform: translateY(0);
+    }
+    .anim-dir-history-item.current {
+      border-color: rgba(212,96,138,0.3);
+      background: rgba(212,96,138,0.05);
+    }
+    .anim-dir-history-path {
+      font-size: 12px; color: var(--text-1); font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;
+    }
+    .anim-dir-history-time {
+      font-size: 10px; color: var(--text-3); font-family: 'JetBrains Mono', monospace; flex-shrink: 0;
+    }
+    @keyframes qualityPop {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .anim-download {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+    .anim-dl-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      animation: dlPop 0.6s ease forwards;
+      cursor: default;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .anim-dl-btn:first-child {
+      background: linear-gradient(135deg, var(--indigo), #60a5fa);
+      animation-delay: 0.3s;
+    }
+    .anim-dl-btn:last-child {
+      background: linear-gradient(135deg, var(--teal), #40c9b8);
+      animation-delay: 0.6s;
+    }
+    .anim-dl-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px -8px rgba(0,0,0,0.2);
+    }
+    .anim-dl-btn:active { transform: scale(0.96); }
+    @keyframes dlPop {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Step 5 进度脉动 + 完成回调呼吸 */
+    .anim-progress-pulse {
+      width: 140px;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(0,0,0,0.06);
+      overflow: hidden;
+      position: relative;
+    }
+    body.dark .anim-progress-pulse { background: rgba(255,255,255,0.08); }
+    .anim-progress-pulse-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, var(--pink), var(--indigo));
+      width: 0%;
+      animation: progressPulse 3.2s ease-in-out infinite;
+    }
+    @keyframes progressPulse {
+      0% { width: 0%; }
+      25% { width: 35%; }
+      55% { width: 78%; }
+      78% { width: 78%; }
+      88% { width: 100%; }
+      100% { width: 0%; }
+    }
+    .anim-check-breathe {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--green), #4ade80);
+      display: flex; align-items: center; justify-content: center;
+      transform: scale(0);
+      opacity: 0;
+      animation: checkPop 0.5s 1.7s ease forwards;
+      box-shadow: 0 0 0 0 rgba(52,167,126,0.5);
+      animation: checkPop 0.5s 1.7s ease forwards, checkBreathe 2s 2.2s ease infinite;
+    }
+    @keyframes checkBreathe {
+      0%,100% { box-shadow: 0 0 0 0 rgba(52,167,126,0.45); }
+      50% { box-shadow: 0 0 0 10px rgba(52,167,126,0); }
+    }
+
+    .anim-check {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--green), #4ade80);
+      display: flex; align-items: center; justify-content: center;
+      animation: checkPop 0.5s ease forwards;
+    }
+    .anim-check svg { width: 18px; height: 18px; color: #fff; }
+    @keyframes checkPop {
+      from { transform: scale(0) rotate(-180deg); opacity: 0; }
+      to { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+
+    /* 底部提示 */
+    .footer {
+      text-align: center;
+      padding: 40px 32px 60px;
+      color: var(--text-3);
+      font-size: 13px;
+    }
+    .footer a {
+      color: var(--indigo);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer a:hover { text-decoration: underline; }
+
+    /* 通用动画 */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(30px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 提示弹窗 */
+    .tip-box {
+      max-width: 900px;
+      margin: 0 auto 40px;
+      padding: 20px 24px;
+      background: rgba(59,130,246,0.06);
+      border: 1px solid rgba(59,130,246,0.15);
+      border-radius: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .tip-box svg { width: 20px; height: 20px; color: var(--indigo); flex-shrink: 0; margin-top: 2px; }
+    .tip-box p { font-size: 13px; color: var(--text-2); line-height: 1.7; }
+    .tip-box strong { color: var(--text-1); }
+
+    /* 滚动条 */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 3px; }
+    body.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+  </style>
+</head>
+<body>
+  <!-- 导航栏 -->
+  <nav class="nav">
+    <div class="nav-brand">
+      <div class="nav-logo"><span>BG</span></div>
+      <div>
+        <div class="nav-title">BiliGrab 教程</div>
+        <div class="nav-subtitle">5 步上手，轻松下载</div>
+      </div>
+    </div>
+    <button class="theme-btn" id="themeBtn" title="切换深色/浅色">
+      <svg class="icon-sun" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="7" r="2.5"/><path d="M7 1v1.6M7 11.4V13M13 7h-1.6M2.6 7H1M11.2 2.8l-1.1 1.1M3.9 11.2l-1.1 1.1M11.2 11.2l-1.1-1.1M3.9 2.8 2.8 3.9"/></g></svg>
+      <svg class="icon-moon" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12.54 8.45a5.5 5.5 0 0 1-7.09-7.09 5.5 5.5 0 1 0 7.09 7.09z"/></g></svg>
+    </button>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1 class="hero-title">欢迎使用 <span>BiliGrab</span></h1>
+    <p class="hero-desc">一站式视频下载工具，支持 B 站、抖音、快手、网易云音乐、影视在线观看、UC 网盘解析。</p>
+    <div class="hero-badge">
+      <svg viewBox="0 0 14 14" fill="none" width="14" height="14"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M5 7l1.5 1.5L9.5 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      免费开源 · 无需安装 ffmpeg
+    </div>
+  </section>
+
+  <!-- 步骤 -->
+  <div class="steps" id="steps">
+
+    <!-- Step 1 -->
+    <div class="step-card" data-step="1">
+      <div class="step-number">01</div>
+      <div class="step-content">
+        <div class="step-title">粘贴链接</div>
+        <div class="step-desc">
+          在输入框中粘贴 B 站视频链接或 BV 号。支持<strong>多行批量</strong>输入，一行一个链接。也可以粘贴图片动态（opus/read）链接。
+        </div>
+        <div class="step-hint">
+          <svg viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M7 .5v13M.5 7h13"/></svg>
+          支持 BV 号、完整 URL、短链接
+        </div>
+        <div class="demo-area" id="step1Demo">
+          <div class="anim-input" id="step1Input" tabindex="0" role="button" aria-label="点击模拟输入链接">
+            <span class="step1-typed"></span><span class="step1-cursor"></span>
+          </div>
+          <div class="anim-arrow">→</div>
+          <div class="anim-input" style="border-color:var(--indigo);" id="step1Result">
+            <span style="color:var(--text-3);font-size:12px;">点击输入框开始演示</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step-card" data-step="2">
+      <div class="step-number">02</div>
+      <div class="step-content">
+        <div class="step-title">点击解析</div>
+        <div class="step-desc">
+          点击「解析全部」按钮，BiliGrab 会自动获取视频信息、可用画质、封面、UP 主等元数据。
+        </div>
+        <div class="step-hint">
+          <svg viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M7 .5v13M.5 7h13"/></svg>
+          多条链接会显示为清单，支持勾选
+        </div>
+        <div class="demo-area" id="step2Demo">
+          <button class="anim-btn" id="step2ParseBtn">解析全部</button>
+          <div class="anim-arrow">→</div>
+          <div class="anim-card" id="step2Card" style="width:0; opacity:0; overflow:hidden;">
+            <div class="anim-card-cover"></div>
+            <div class="anim-card-text">
+              <div class="anim-card-title" id="step2Title"></div>
+              <div class="anim-card-sub">UP 主 · 128万播放</div>
+            </div>
+          </div>
+          <div class="anim-result-list" id="step2ResultList" style="width:0; opacity:0;">
+            <div class="anim-result-item" data-idx="0">
+              <div class="anim-result-cover"></div>
+              <div class="anim-result-text">
+                <div class="anim-result-title"></div>
+                <div class="anim-result-sub">480P · 84MB</div>
+              </div>
+              <div class="anim-result-cb"><div class="anim-cb-box"></div></div>
+            </div>
+            <div class="anim-result-item" data-idx="1">
+              <div class="anim-result-cover"></div>
+              <div class="anim-result-text">
+                <div class="anim-result-title"></div>
+                <div class="anim-result-sub">1080P · 212MB</div>
+              </div>
+              <div class="anim-result-cb"><div class="anim-cb-box"></div></div>
+            </div>
+            <div class="anim-result-item" data-idx="2">
+              <div class="anim-result-cover"></div>
+              <div class="anim-result-text">
+                <div class="anim-result-title"></div>
+                <div class="anim-result-sub">4K · 486MB</div>
+              </div>
+              <div class="anim-result-cb"><div class="anim-cb-box"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step-card" data-step="3">
+      <div class="step-number">03</div>
+      <div class="step-content">
+        <div class="step-title">选择画质</div>
+        <div class="step-desc">
+          解析完成后，右侧面板会显示可用画质列表。登录 B 站后可解锁 1080P+、1080P60、4K 等高画质。
+        </div>
+        <div class="step-hint">
+          <svg viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M7 .5v13M.5 7h13"/></svg>
+          不登录也可免费下载基础画质
+        </div>
+        <div class="demo-area">
+          <div class="anim-quality" id="step3Quality">
+            <div class="anim-q-item" data-q="480P" tabindex="0" role="button">480P</div>
+            <div class="anim-q-item" data-q="1080P" tabindex="0" role="button">1080P</div>
+            <div class="anim-q-item" data-q="4K" tabindex="0" role="button">4K</div>
+            <div class="anim-q-badge" id="step3Badge">已选 480P</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step-card" data-step="4">
+      <div class="step-number">04</div>
+      <div class="step-content">
+        <div class="step-title">选择保存目录</div>
+        <div class="step-desc">
+          点击「选择目录」按钮指定下载保存位置。支持历史目录记录，下次启动自动恢复。
+        </div>
+        <div class="step-hint">
+          <svg viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M7 .5v13M.5 7h13"/></svg>
+          点击下拉箭头可查看历史目录
+        </div>
+        <div class="demo-area" id="step4Demo">
+          <button class="anim-btn" id="step4DirBtn">选择目录</button>
+          <div class="anim-arrow">→</div>
+          <div class="anim-dir-popup" id="step4Popup" style="width:0; opacity:0; overflow:hidden;">
+            <div class="anim-dir-current">
+              <div class="anim-dir-current-mark"></div>
+              <div class="anim-dir-current-text">
+                <div class="anim-dir-current-label">当前目录</div>
+                <div class="anim-dir-current-path"></div>
+              </div>
+            </div>
+            <div class="anim-dir-history">
+              <div class="anim-dir-history-title">最近使用</div>
+              <div class="anim-dir-history-item" data-path="0">
+                <div class="anim-dir-history-path">视频文件夹</div>
+                <div class="anim-dir-history-time">今天 14:22</div>
+              </div>
+              <div class="anim-dir-history-item" data-path="1">
+                <div class="anim-dir-history-path">Download</div>
+                <div class="anim-dir-history-time">昨天 09:11</div>
+              </div>
+              <div class="anim-dir-history-item" data-path="2">
+                <div class="anim-dir-history-path">B站下载</div>
+                <div class="anim-dir-history-time">前天 22:05</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step-card" data-step="5">
+      <div class="step-number">05</div>
+      <div class="step-content">
+        <div class="step-title">开始下载</div>
+        <div class="step-desc">
+          点击对应按钮即可下载：视频（mp4）、音频（mp3）、仅视频流（无声）。进度条实时显示下载状态。
+        </div>
+        <div class="step-hint">
+          <svg viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M7 .5v13M.5 7h13"/></svg>
+          支持批量下载清单中的所有视频
+        </div>
+        <div class="demo-area">
+          <div class="anim-download">
+            <div class="anim-dl-btn">
+              <svg viewBox="0 0 14 14" fill="none" width="14" height="14"><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M7 2v7M4 7l3 3 3-3M2 12h10"/></svg>
+              下载视频（mp4）
+            </div>
+            <div class="anim-dl-btn">
+              <svg viewBox="0 0 14 14" fill="none" width="14" height="14"><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M7 2v7M4 7l3 3 3-3M2 12h10"/></svg>
+              下载音频（mp3）
+            </div>
+          </div>
+          <div class="anim-arrow">→</div>
+          <div class="anim-download" style="gap:12px;">
+            <div class="anim-progress">
+              <div class="anim-progress-fill"></div>
+            </div>
+            <div class="anim-check">
+              <svg viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M3.5 7.5l2.5 2.5 5-5"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示 -->
+  <div class="tip-box">
+    <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M7 4.5v3M7 9.5v.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <p>
+      <strong>进阶功能：</strong>除了 B 站视频下载，BiliGrab 还支持<strong>抖音/快手视频解析</strong>、<strong>网易云音乐搜索与歌单导入</strong>、<strong>影视在线观看</strong>（支持自动连播）以及 <strong>UC 网盘分享解析</strong>。点击标题栏的平台切换按钮即可切换不同功能。
+    </p>
+  </div>
+
+  <!-- 底部 -->
+  <footer class="footer">
+    <p>BiliGrab · B 站视频下载器 · 仅供个人学习使用</p>
+    <p style="margin-top:8px;font-size:11px;">点击右上角切换 🌙 深色模式 / ☀️ 浅色模式</p>
+  </footer>
+
+  <!-- 主题切换光晕层 -->
+  <div class="theme-glow" aria-hidden="true">
+    <div class="theme-glow-canvas"></div>
+  </div>
+  <script>
+    // 主题切换（优先 localStorage，否则跟随系统 prefers-color-scheme）
+    const themeBtn = document.getElementById('themeBtn');
+    let dark = false;
+    try { dark = localStorage.getItem('biligrab_dark') === '1'; } catch (_) {}
+
+    function setTheme(isDark) {
+      dark = isDark;
+      document.body.classList.toggle('dark', dark);
+      if (themeBtn) {
+        themeBtn.classList.toggle('active', dark);
+        themeBtn.title = dark ? '切换为浅色模式' : '切换为深色模式';
+      }
+      try { localStorage.setItem('biligrab_dark', dark ? '1' : '0'); } catch (_) {}
+      // 触发点击位置的光晕脉冲
+      const rect = themeBtn ? themeBtn.getBoundingClientRect() : null;
+      if (rect && window.spawnGlowPulse) {
+        window.spawnGlowPulse(rect.left + rect.width / 2, rect.top + rect.height / 2, dark ? 'dark' : 'light');
+      }
+    }
+
+    // 初始化：如果用户没选过，跟随系统主题
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (localStorage.getItem('biligrab_dark') === null) setTheme(prefersDark);
+    else setTheme(dark);
+
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => setTheme(!dark));
+      themeBtn.classList.toggle('active', dark);
+      themeBtn.title = dark ? '切换为浅色模式' : '切换为深色模式';
+    }
+
+    // 系统主题变化时自动同步（除非用户手动切换过）
+    try {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)');
+      mq.addEventListener('change', (e) => {
+        if (localStorage.getItem('biligrab_dark') === null) setTheme(e.matches);
+      });
+    } catch (_) {}
+
+    // 需要的话，从主应用注入 spawnGlowPulse，否则静默失败
+    window.spawnGlowPulse = window.spawnGlowPulse || function () {};
+
+    // 滚动动画
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15 });
+
+    document.querySelectorAll('.step-card').forEach(card => {
+      observer.observe(card);
+    });
+
+    // ===== Step 1: 输入框点击 → 打字动画 + 光标闪烁 =====
+    (function () {
+      const input = document.getElementById('step1Input');
+      const result = document.getElementById('step1Result');
+      const typed = input ? input.querySelector('.step1-typed') : null;
+      if (!input || !typed) return;
+
+      const SAMPLE = 'BV1xx411c7mD';
+      let running = false;
+
+      function typeText() {
+        if (running) return;
+        running = true;
+        typed.textContent = '';
+        if (result) result.innerHTML = '<span style="color:var(--text-3);font-size:12px;">正在输入...</span>';
+        let i = 0;
+        function tick() {
+          if (i < SAMPLE.length) {
+            typed.textContent += SAMPLE[i];
+            i++;
+            setTimeout(tick, 70 + Math.random() * 40);
+          } else {
+            running = false;
+            if (result) result.innerHTML = '<span style="color:var(--text-1);font-size:12px;">粘贴完成 ✓</span>';
+          }
+        }
+        tick();
+      }
+
+      input.addEventListener('click', typeText);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); typeText(); } });
+    })();
+
+    // ===== Step 2: 点击「解析全部」→ 卡片弹出 + 标题逐字 =====
+    (function () {
+      const btn = document.getElementById('step2ParseBtn');
+      const card = document.getElementById('step2Card');
+      const title = document.getElementById('step2Title');
+      if (!btn || !card || !title) return;
+
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = '解析中...';
+        card.style.width = '0';
+        card.style.opacity = '0';
+        title.textContent = '';
+
+        // 1) 等解析中状态结束后，卡片滑入
+        setTimeout(() => {
+          card.style.transition = 'width 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2), opacity 0.35s ease';
+          card.style.width = '';
+          card.style.opacity = '1';
+          btn.textContent = '解析全部';
+          btn.disabled = false;
+
+          // 2) 标题逐字打出
+          const words = '青洲海盐 · 银色年轮 MV 全片'; // 演示用标题
+          let idx = 0;
+          title.textContent = '';
+          function typeTitle() {
+            if (idx < words.length) {
+              title.textContent += words[idx];
+              idx++;
+              setTimeout(typeTitle, 45);
+            }
+          }
+          setTimeout(typeTitle, 350);
+        }, 700);
+      });
+    })();
+
+    // ===== Step 3: 画质点击高亮 + 已选 badge =====
+    (function () {
+      const items = document.querySelectorAll('#step3Quality .anim-q-item');
+      const badge = document.getElementById('step3Badge');
+      if (!items.length || !badge) return;
+
+      let selected = null;
+      function select(item) {
+        if (selected === item) {
+          // 第二次点选：清除选中
+          selected.classList.remove('selected');
+          selected = null;
+          badge.textContent = '未选择画质';
+          badge.style.opacity = '0.5';
+          return;
+        }
+        if (selected) selected.classList.remove('selected');
+        selected = item;
+        item.classList.add('selected');
+        badge.textContent = '已选 ' + item.textContent;
+        badge.style.opacity = '1';
+        // 选中反馈：小波纹
+        item.style.transform = 'scale(0.96)';
+        setTimeout(() => { item.style.transform = ''; }, 150);
+      }
+
+      items.forEach(item => {
+        item.addEventListener('click', () => select(item));
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(item); }
+        });
+      });
+    })();
+
+    // ===== Step 2: 解析结果清单交互（多条视频项可点选、勾选、滑入） =====
+    (function () {
+      const resultList = document.getElementById('step2ResultList');
+      const items = resultList ? resultList.querySelectorAll('.anim-result-item') : [];
+      if (!resultList || !items.length) return;
+
+      // 点击解析按钮后，依次滑入每条结果
+      document.getElementById('step2ParseBtn').addEventListener('click', () => {
+        if (resultList.classList.contains('open')) return;
+        resultList.classList.add('open');
+        items.forEach((item, i) => {
+          setTimeout(() => item.classList.add('visible'), 120 + i * 140);
+        });
+      });
+
+      // 每个结果项点击勾选
+      items.forEach(item => {
+        item.addEventListener('click', () => {
+          const cb = item.querySelector('.anim-cb-box');
+          const was = item.classList.contains('checked');
+          item.classList.toggle('checked', !was);
+          item.style.transform = was ? 'scale(0.97)' : 'scale(0.97)';
+          setTimeout(() => { item.style.transform = ''; }, 150);
+        });
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const cb = item.querySelector('.anim-cb-box');
+            const was = item.classList.contains('checked');
+            item.classList.toggle('checked', !was);
+            item.style.transform = '';
+          }
+        });
+      });
+    })();
+
+    // ===== Step 4: 选择目录弹出（目录卡片 + 历史目录列表滑入） =====
+    (function () {
+      const popup = document.getElementById('step4Popup');
+      const dirBtn = document.getElementById('step4DirBtn');
+      const currentPath = popup ? popup.querySelector('.anim-dir-current-path') : null;
+      const historyItems = popup ? popup.querySelectorAll('.anim-dir-history-item') : [];
+      if (!popup || !dirBtn || !currentPath) return;
+
+      // 第一次点击：弹出目录卡片 + 当前目录 + 历史目录依次滑入
+      dirBtn.addEventListener('click', () => {
+        if (popup.classList.contains('open')) return;
+        currentPath.textContent = 'C:\\Users\\Alice\\Videos';
+        popup.classList.add('open');
+        historyItems.forEach((item, i) => {
+          setTimeout(() => item.classList.add('visible'), 350 + i * 120);
+        });
+      });
+
+      // 点击历史目录项：选中 + 当前目录更新 + 小反馈
+      historyItems.forEach(item => {
+        item.addEventListener('click', () => {
+          historyItems.forEach(h => h.classList.remove('current'));
+          item.classList.add('current');
+          const path = item.querySelector('.anim-dir-history-path').textContent;
+          currentPath.textContent = (path.includes(':') ? '' : 'C:\\Users\\Alice\\') + path;
+          item.style.transform = 'scale(0.97)';
+          setTimeout(() => { item.style.transform = ''; }, 150);
+        });
+        item.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            historyItems.forEach(h => h.classList.remove('current'));
+            item.classList.add('current');
+            const path = item.querySelector('.anim-dir-history-path').textContent;
+            currentPath.textContent = (path.includes(':') ? '' : 'C:\\Users\\Alice\\') + path;
+            item.style.transform = '';
+          }
+        });
+      });
+    })();
+
+    // ===== Step 5: 开始下载 → 进度脉动 + 完成回调 =====
+    (function () {
+      const dlBtns = document.querySelectorAll('#steps .step-card[data-step="5"] .anim-dl-btn');
+      const progressFill = document.querySelector('#steps .step-card[data-step="5"] .anim-progress-pulse-fill');
+      const check = document.querySelector('#steps .step-card[data-step="5"] .anim-check-breathe');
+      if (!dlBtns.length || !progressFill) return;
+
+      function startDownload(which) {
+        // 重置进度条与完成状态
+        progressFill.style.animation = 'none';
+        void progressFill.offsetWidth;
+        progressFill.style.animation = '';
+        if (check) {
+          check.style.animation = 'none';
+          void check.offsetWidth;
+          check.style.animation = '';
+          check.style.opacity = '0';
+        }
+
+        // 开始下载演示
+        setTimeout(() => {
+          progressFill.style.animation = 'progressPulse 3.2s ease-in-out infinite';
+          if (check) {
+            setTimeout(() => {
+              check.style.animation = 'checkPop 0.5s ease forwards, checkBreathe 2s 2.2s ease infinite';
+            }, 1700);
+          }
+        }, 120);
+      }
+
+      dlBtns.forEach(btn => {
+        btn.addEventListener('click', () => startDownload(btn.textContent.trim()));
+        btn.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); startDownload(btn.textContent.trim()); }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

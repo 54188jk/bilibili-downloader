@@ -1,0 +1,21 @@
+node_modules/
+dist/
+dist_v4/
+dist_win/
+*.log
+.electron.log
+electron-err.log
+run_err.txt
+run_log.txt
+.freebuff/
+.screenshot-*.png
+
+build/biligrab-codesign.pfx
+
+# AI 内置模型密钥（仅主进程读取，绝不可提交 / 不可进渲染层）
+src/ai-secrets.json
+
+_git*.py
+_smoke*.py
+_xref.py
+_probe.py

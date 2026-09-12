@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>影视播放器</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #player { width: 100%; height: 100%; display: block; background: #000; }
+  #err { display: none; position: absolute; inset: 0; color: #f66; font-family: sans-serif;
+         align-items: center; justify-content: center; text-align: center; font-size: 14px;
+         line-height: 1.8; padding: 20px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<video id="player" controls autoplay playsinline></video>
+<div id="err"></div>
+<script>
+  // 通过 URL query 传入待播放的媒体地址
+  const params = new URLSearchParams(location.search);
+  let src = params.get('url') || '';
+  const referer = params.get('referer') || '';
+  try { src = decodeURIComponent(src); } catch (_) {}
+
+  const v = document.getElementById('player');
+  const errEl = document.getElementById('err');
+
+  function fail(msg) {
+    errEl.style.display = 'flex';
+    errEl.textContent = msg;
+    v.style.display = 'none';
+  }
+
+  if (!src) { fail('未提供播放地址'); }
+  else {
+    v.src = src;
+    v.onerror = () => fail('播放出错：' + (v.error ? v.error.message || v.error.code : '未知错误') +
+      '<br>源：' + src.slice(0, 120));
+    // 上报当前进度
+    v.ontimeupdate = () => {
+      if (v.duration && isFinite(v.duration)) {
+        const p = { found: true, paused: v.paused, ended: v.ended,
+          currentTime: v.currentTime, duration: v.duration,
+          readyState: v.readyState, networkState: v.networkState,
+          error: v.error ? String(v.error.code) : null, src: (v.currentSrc || src).slice(0,160) };
+        try { window.__probe = p; } catch (_) {}
+      }
+    };
+  }
+</script>
+</body>
+</html>
