@@ -85,6 +85,114 @@ function setupSessionUA() {
   session.defaultSession.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
 }
 
+// ============================================
+//  启动动画 Splash（主窗口就绪后自动淡出）
+// ============================================
+let splashWindow = null;
+
+// 读取应用图标并转成 data URL，交给启动页显示真实图标
+function getSplashIconDataUrl() {
+  try {
+    const candidates = app.isPackaged
+      ? [path.join(process.resourcesPath, 'icon.png')]
+      : [path.join(app.getAppPath(), 'build', 'icon.png'), path.join(app.getAppPath(), 'build', 'icon.ico')];
+    for (const c of candidates) {
+      if (fs.existsSync(c)) {
+        const ext = c.toLowerCase().endsWith('.ico') ? 'x-icon' : 'png';
+        return 'data:image/' + ext + ';base64,' + fs.readFileSync(c).toString('base64');
+      }
+    }
+  } catch (_) {}
+  return '';
+}
+
+function createSplash() {
+  if (splashWindow && !splashWindow.isDestroyed()) return splashWindow;
+
+  const splashFile = path.join(__dirname, 'renderer', 'splash.html');
+
+  // transparent=true 时窗口透出桌面，玻璃质感最真实；
+  // 个别环境（禁用 GPU 合成等）透明窗口会加载失败，自动降级为不透明版本。
+  const build = (transparent) => {
+    const w = new BrowserWindow({
+      width: 460,
+      height: 340,
+      frame: false,
+      resizable: false,
+      movable: true,
+      transparent,
+      backgroundColor: transparent ? '#00000000' : '#0c0e14',
+      alwaysOnTop: true,
+      center: true,
+      skipTaskbar: true,
+      show: false,
+      hasShadow: !transparent,
+      webPreferences: {
+        preload: path.join(__dirname, 'splash-preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+      },
+    });
+
+    w.loadFile(splashFile).catch(() => {
+      if (!transparent) return;
+      try { w.destroy(); } catch (_) {}
+      try { splashWindow = build(false); } catch (_) { splashWindow = null; }
+    });
+
+    // 兜底：个别环境不触发 ready-to-show，1.2s 后强制显示
+    w.once('ready-to-show', () => { try { w.show(); } catch (_) {} });
+    setTimeout(() => {
+      try { if (!w.isDestroyed() && !w.isVisible()) w.show(); } catch (_) {}
+    }, 1200);
+
+    // 页面加载完成后推送版本号与真实图标
+    w.webContents.once('did-finish-load', () => {
+      try {
+        w.webContents.send('splash:init', { version: app.getVersion(), name: 'BiliGrab' });
+        const icon = getSplashIconDataUrl();
+        if (icon) w.webContents.send('splash:icon', icon);
+      } catch (_) {}
+    });
+    return w;
+  };
+
+  try {
+    splashWindow = build(true);
+  } catch (e) {
+    console.error('[splash] 透明窗口创建失败，降级不透明:', e.message);
+    try { splashWindow = build(false); } catch (_) { splashWindow = null; }
+  }
+  return splashWindow;
+}
+
+// 推进启动进度（无 splash 时为空操作）
+function splashStep(pct, text) {
+  try {
+    if (splashWindow && !splashWindow.isDestroyed()) {
+      splashWindow.webContents.send('splash:progress', { pct, text });
+    }
+  } catch (_) {}
+}
+
+// 收尾：进度拉满 -> 播放离场动画 -> 销毁 -> 回调（显示主窗口）
+function finishSplash(cb) {
+  const done = () => {
+    try { if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy(); } catch (_) {}
+    splashWindow = null;
+    if (typeof cb === 'function') cb();
+  };
+  if (!splashWindow || splashWindow.isDestroyed()) {
+    if (typeof cb === 'function') cb();
+    return;
+  }
+  try {
+    splashWindow.webContents.send('splash:progress', { pct: 100, text: '准备就绪' });
+    splashWindow.webContents.send('splash:done');
+  } catch (_) {}
+  setTimeout(done, 620); // 与 CSS 离场动画时长（460ms）留出余量
+}
+
 function createWindow() {
   // 解析软件图标（运行时用于窗口/任务栏左上角图标）
   function getAppIcon() {
@@ -104,6 +212,7 @@ function createWindow() {
     minHeight: 640,
     frame: false,
     titleBarStyle: 'hidden',
+    show: false, // 先隐藏，等启动动画淡出后再显示，避免白窗闪烁
     icon: getAppIcon(),
     backgroundColor: '#0a0a0f',
     webPreferences: {
@@ -117,6 +226,18 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenuBarVisibility(false);
+
+  // 首帧就绪后播放启动动画离场，随后显示主窗口（避免白窗闪烁）
+  let mainShown = false;
+  const showMain = () => {
+    if (mainShown) return;
+    mainShown = true;
+    finishSplash(() => {
+      try { mainWindow.show(); mainWindow.focus(); } catch (_) {}
+    });
+  };
+  mainWindow.once('ready-to-show', showMain);
+  setTimeout(showMain, 3000); // 兜底：极端情况（渲染卡住）也必须显示主窗口
   mainWindow.on('close', (e) => {
     // 托盘驻留：关闭主窗口时隐藏而非销毁，托盘菜单"退出"会强制 app.quit()
     if (!app.isQuitting) {
@@ -2642,6 +2763,18 @@ app.whenReady().then(async () => {
     callback({ requestHeaders: details.requestHeaders });
   });
 
+  // 初始化截图工具（托盘/全局热键/开机自启/--hidden）——提前执行以获得 hiddenStart 判定
+  const captureInit = capture.init({ mainWindowGetter: () => mainWindow });
+  const hiddenStart = captureInit?.hiddenStart;
+
+  // 启动动画：后台静默启动（--hidden）时不显示
+  if (!hiddenStart) {
+    createSplash();
+    // 给启动页一点渲染时间，避免一闪而过
+    await new Promise((r) => setTimeout(r, 180));
+  }
+  splashStep(14, '正在恢复登录状态');
+
   // 启动时尝试加载已保存登录态（B站 + 抖音）
   try {
     const auth = loadAuth();
@@ -2658,6 +2791,8 @@ app.whenReady().then(async () => {
     }
   } catch (_) {}
 
+  splashStep(38, '正在启动音乐服务');
+
   // 自动启动本地音乐 API（用户可随时在音乐面板使用）
   try {
     const ms = await musicApi.ensureServer();
@@ -2665,6 +2800,8 @@ app.whenReady().then(async () => {
   } catch (e) {
     console.error('[music] 启动异常:', e.message);
   }
+
+  splashStep(62, '正在启动影视服务');
 
   // 自动启动本地影视 API（多源聚合搜索 + 磁盘缓存，随应用启停）
   try {
@@ -2674,9 +2811,7 @@ app.whenReady().then(async () => {
     console.error('[movie-api] 启动异常:', e.message);
   }
 
-  // 初始化截图工具（托盘/全局热键/开机自启/--hidden）
-  const captureInit = capture.init({ mainWindowGetter: () => mainWindow });
-  const hiddenStart = captureInit?.hiddenStart;
+  splashStep(82, '正在加载主界面');
 
   if (!hiddenStart) {
     createWindow();

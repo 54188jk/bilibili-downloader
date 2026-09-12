@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BiliGrab</title>
+<!-- 网络字体异步加载：离线时直接回落系统字体，不阻塞首屏 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600&family=JetBrains+Mono:wght@500&display=swap" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="splash.css">
+</head>
+<body>
+
+<div class="glass">
+  <div class="aurora a1"></div>
+  <div class="aurora a2"></div>
+  <div class="grid"></div>
+  <div class="sweep"></div>
+</div>
+
+<main class="shell">
+  <div class="logo">
+    <div class="logo-box">
+      <!-- 主进程注入真实图标（data URL）；注入失败时回落到内置矢量图形 -->
+      <img id="appIcon" alt="" hidden>
+      <svg class="logo-fallback" id="logoFallback" width="40" height="40" viewBox="0 0 40 40" fill="none">
+        <path d="M15 12.5v15c0 .9 1.02 1.42 1.78.9l11.2-7.5a1.08 1.08 0 0 0 0-1.8l-11.2-7.5c-.76-.52-1.78 0-1.78.9z" fill="url(#lg)"/>
+        <path d="M8.5 13.5a13 13 0 0 0 0 13M17 8.5a13 13 0 0 1 9.9 4.6" stroke="rgba(255,255,255,.65)" stroke-width="2" stroke-linecap="round"/>
+        <defs>
+          <linearGradient id="lg" x1="15" y1="12" x2="29" y2="28" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#8fc0ff"/><stop offset="1" stop-color="#5ce1f2"/>
+          </linearGradient>
+        </defs>
+      </svg>
+    </div>
+    <div class="logo-ring"></div>
+  </div>
+
+  <h1 class="app-name">BiliGrab</h1>
+  <p class="app-sub">视频下载 · 音乐 · 影视 · 私信</p>
+
+  <div class="progress">
+    <div class="track">
+      <div class="fill" id="fill"><span class="spark"></span></div>
+      <span class="head" id="head"></span>
+    </div>
+    <div class="meta">
+      <span id="statusText">正在启动...</span>
+      <span class="pct" id="pctText">0%</span>
+    </div>
+  </div>
+</main>
+
+<div class="foot" id="footText">BiliGrab</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var fill = document.getElementById('fill');
+  var head = document.getElementById('head');
+  var statusText = document.getElementById('statusText');
+  var pctText = document.getElementById('pctText');
+  var appIcon = document.getElementById('appIcon');
+  var fallback = document.getElementById('logoFallback');
+  var footText = document.getElementById('footText');
+
+  var current = 0;      // 当前显示进度
+  var target = 0;       // 目标进度（主进程下发）
+  var timer = null;
+
+  // 数字平滑滚动到目标值，避免进度跳跃
+  function tick() {
+    var diff = target - current;
+    if (Math.abs(diff) < 0.6) {
+      current = target;
+      if (timer) { clearInterval(timer); timer = null; }
+    } else {
+      current += diff * 0.18 + (diff > 0 ? 0.4 : -0.4);
+    }
+    var v = Math.max(0, Math.min(100, current));
+    root.style.setProperty('--p', v.toFixed(1));
+    pctText.textContent = Math.round(v) + '%';
+  }
+
+  function setProgress(pct, text) {
+    if (typeof pct === 'number' && !isNaN(pct)) {
+      target = Math.max(target, Math.min(100, Math.max(0, pct)));
+      if (!timer) timer = setInterval(tick, 16);
+    }
+    if (text && statusText.textContent !== text) {
+      // 文字淡出淡入切换，避免生硬跳变
+      statusText.classList.add('switching');
+      setTimeout(function () {
+        statusText.textContent = text;
+        statusText.classList.remove('switching');
+      }, 180);
+    }
+  }
+
+  // 主进程通道（预加载注入）；未注入时走本地演示进度，保证界面不卡死
+  var api = window.splash;
+  if (api) {
+    api.onInit(function (d) {
+      if (d && d.version) footText.textContent = 'BiliGrab  v' + d.version;
+    });
+    api.onIcon(function (dataUrl) {
+      if (!dataUrl) return;
+      appIcon.src = dataUrl;
+      appIcon.hidden = false;
+      if (fallback) fallback.style.display = 'none';
+    });
+    api.onProgress(function (d) { setProgress(d && d.pct, d && d.text); });
+    api.onDone(function () {
+      target = 100;
+      if (!timer) timer = setInterval(tick, 16);
+      setTimeout(function () { document.body.classList.add('leaving'); }, 240);
+    });
+  } else {
+    // 兜底：独立打开本页（或预加载未注入）时播放演示流程，便于预览效果
+    var steps = [
+      [14, '正在恢复登录状态'],
+      [38, '正在启动音乐服务'],
+      [62, '正在启动影视服务'],
+      [82, '正在加载主界面'],
+      [100, '准备就绪'],
+    ];
+    var i = 0;
+    (function next() {
+      if (i < steps.length) {
+        setProgress(steps[i][0], steps[i][1]);
+        i++;
+        setTimeout(next, 900);
+      } else {
+        setTimeout(function () { document.body.classList.add('leaving'); }, 700);
+      }
+    })();
+  }
+})();
+</script>
+</body>
+</html>
