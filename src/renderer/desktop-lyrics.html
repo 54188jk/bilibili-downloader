@@ -773,6 +773,15 @@
     });
     window.dl.onTick(onTick);
 
+    // 应用内歌词颜色联动：覆盖桌面歌词强调色
+    window.dl.onColor((color) => {
+      if (!color || typeof color !== 'string') return;
+      document.documentElement.style.setProperty('--accent', color);
+      document.documentElement.style.setProperty('--accent-glow', color.replace(/[\d.]+\)$/, '.55)'));
+      document.documentElement.style.setProperty('--accent-soft', color.replace(/[\d.]+\)$/, '.35)'));
+      document.documentElement.style.setProperty('--accent-dim', color.replace(/[\d.]+\)$/, '.12)'));
+    });
+
     // ===== 命令处理 =====
     window.dl.onCmd((cmd) => {
       switch (cmd.type) {

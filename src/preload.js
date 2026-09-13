@@ -92,6 +92,7 @@ contextBridge.exposeInMainWorld('api', {
   desktopLyricsIsOpen: () => ipcRenderer.invoke('lyrics:isOpen'),
   desktopLyricsLoad: (payload) => ipcRenderer.send('desktop-lyrics:load', payload),
   desktopLyricsTick: (payload) => ipcRenderer.send('desktop-lyrics:tick', payload),
+  desktopLyricsSetColor: (color) => { try { ipcRenderer.send('desktop-lyrics:setColor', color); } catch (_) {} },
   onDesktopLyricsClosed: (cb) => {
     const handler = () => cb();
     ipcRenderer.on('desktop-lyrics:closed', handler);

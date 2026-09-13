@@ -392,34 +392,47 @@ body.dark .song-row.playing{border-color:rgba(10,132,255,.4)}
 .hist-sub{font-size:11px;color:var(--ink-3);margin-top:2px;font-variant-numeric:tabular-nums}
 .hist-size{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
 
-/* ===== 吸底全局播放栏（克制毛玻璃） ===== */
-.global-player{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--sb-h) + 8px);z-index:150;width:min(1120px,calc(100vw - 60px));
-  display:flex;align-items:center;gap:14px;padding:10px 18px;border-radius:18px;
-  background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(245,245,247,.60));
-  backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
-  border:.5px solid var(--border);box-shadow:var(--shadow-2);
-  transition:box-shadow .25s var(--ease),transform .25s var(--ease)}
-.global-player::before{content:"";position:absolute;inset:0;border-radius:18px;
-  background:linear-gradient(180deg,rgba(255,255,255,.12),transparent 30%);
-  pointer-events:none}
-.gp-tabs{display:flex;flex-direction:column;gap:3px}
-.gp-tab{font-size:10px;padding:2px 9px;border-radius:999px;border:1px solid transparent;background:transparent;color:var(--ink-3);cursor:pointer;transition:all .15s var(--ease);white-space:nowrap;font-family:inherit}
-.gp-tab:hover{color:var(--ink)}
-.gp-tab.active{background:var(--selected-bg);color:var(--accent);border-color:rgba(0,122,255,.3)}
-.platform-tag{font-size:10px;padding:1px 7px;border-radius:999px;border:1px solid var(--border);color:var(--ink-3);flex-shrink:0}
-.gp-grip{cursor:grab;flex-shrink:0;width:18px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--ink-3);background:transparent;border:0;padding:0;touch-action:none;transition:color .15s var(--ease)}
-.gp-grip:hover{color:var(--ink)}
-.gp-grip svg{width:14px;height:14px}
-.global-player.dragging{cursor:grabbing;user-select:none;opacity:.97;box-shadow:var(--shadow-2),0 0 0 1.5px var(--accent)}
-.global-player.min{width:auto;max-width:300px;padding:8px 12px;gap:10px;cursor:default}
-.global-player.min .gp-tabs,
-.global-player.min .p-info .p-progress,
-.global-player.min .p-info .p-time,
-.global-player.min .p-sub,
-.global-player.min .p-controls .p-btn:not(#gpMinBtn){display:none}
-.global-player.min .p-info{flex:0 0 auto;min-width:0}
-.global-player.min .p-name{font-size:12px}
+/* ===== 播放器控件按钮（视图内本地播放器） ===== */
 .p-btn svg{width:14px;height:14px}
+
+/* ===== 音乐歌词界面 ===== */
+#view-lyric{--lyric-accent:#d4608a;--lyric-fs:24px}
+.lyric-ui{height:calc(100vh - var(--tb-h) - var(--sb-h) - 24px);display:flex;flex-direction:column;padding:0;overflow:hidden}
+.lyric-top{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:.5px solid var(--separator)}
+.lyric-title{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:var(--ink)}
+.lyric-title .ic{width:16px;height:16px;color:var(--accent)}
+.lyric-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.lyric-body{flex:1;display:flex;gap:18px;padding:22px 18px;min-height:0}
+.lyric-left{width:330px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
+.lyric-bigicon{position:relative;width:150px;height:150px;display:grid;place-items:center;color:var(--lyric-accent)}
+.lyric-bigicon svg{width:78px;height:78px;filter:drop-shadow(0 4px 18px color-mix(in srgb,var(--lyric-accent) 45%,transparent))}
+.lyric-bigicon .lbi-ring{position:absolute;inset:0;border-radius:50%;border:2px solid color-mix(in srgb,var(--lyric-accent) 35%,transparent);opacity:.6}
+#view-lyric.is-playing .lyric-bigicon .lbi-ring{animation:lyricPulse 2.4s ease-in-out infinite}
+@keyframes lyricPulse{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.08);opacity:.15}}
+.ly-player{width:100%}
+.lyric-right{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0;background:var(--content-bg);border:1px solid var(--separator);border-radius:var(--r-m);overflow:hidden}
+.lyric-song{padding:16px 22px;border-bottom:.5px solid var(--separator);font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyric-lines{flex:1;overflow-y:auto;padding:26px 22px 40px;display:flex;flex-direction:column;gap:14px;scroll-behavior:smooth;mask-image:linear-gradient(180deg,transparent,#000 12%,#000 86%,transparent)}
+.lyric-line{font-size:var(--lyric-fs);line-height:1.35;color:var(--ink-2);cursor:pointer;transition:color .25s var(--ease),transform .25s var(--ease),opacity .25s var(--ease);opacity:.55}
+.lyric-line:hover{opacity:.85}
+.lyric-line.active{color:var(--lyric-accent);font-weight:700;opacity:1;transform:scale(1.04);transform-origin:left center}
+.lyric-line.active:hover{transform:scale(1.06)}
+.lyric-empty,.lyric-loading{padding:40px 0;text-align:center;color:var(--ink-3);font-size:13px}
+
+/* 歌词颜色弹层 */
+.lyric-gear{position:relative}
+.lyric-color-pop{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:210px;padding:14px;border-radius:var(--r-m);
+  background:var(--glass-ultra);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
+  border:.5px solid var(--border);box-shadow:var(--shadow-2)}
+.lyric-color-pop[hidden]{display:none}
+.lcp-title{font-size:12px;font-weight:600;color:var(--ink);margin-bottom:10px}
+.lcp-swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:12px}
+.lcp-swatches .sw{width:100%;aspect-ratio:1;border-radius:8px;cursor:pointer;border:2px solid transparent;transition:transform .15s var(--ease)}
+.lcp-swatches .sw:hover{transform:scale(1.12)}
+.lcp-swatches .sw.active{border-color:#fff;box-shadow:0 0 0 2px var(--accent)}
+.lcp-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink-2);margin-top:8px}
+.lcp-row input[type=color]{width:34px;height:24px;border:none;background:none;cursor:pointer;padding:0}
+.lcp-row input[type=range]{flex:1}
 
 /* ===== 状态栏（克制毛玻璃） ===== */
 .statusbar{position:fixed;left:0;right:0;bottom:0;z-index:120;height:var(--sb-h);display:flex;align-items:center;gap:16px;padding:0 14px;

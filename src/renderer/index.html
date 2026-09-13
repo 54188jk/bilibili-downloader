@@ -51,7 +51,7 @@
         <button class="side-item active" data-view="bili"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5.014 8.764V5.236c0-.408.474-.666.86-.468l3.441 1.765a.515.515 0 0 1 0 .934l-3.44 1.765c-.387.198-.861-.06-.861-.468M.61 6.139a6.5 6.5 0 0 0 0 1.593m2.505-5.933a6.5 6.5 0 0 1 1.38-.797M1.068 4.43a6.5 6.5 0 0 1 .796-1.38"/><path d="M7.012.5c3.55 0 6.427 2.91 6.427 6.5s-2.877 6.5-6.427 6.5c-2.446 0-4.573-1.382-5.659-3.416"/></g></svg>B站</button>
         <button class="side-item" data-view="douyin"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 13.42a2 2 0 1 0 0-4 2 2 0 0 0 0 4m9-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4"/><path d="M13.5 8.92V1.08a.5.5 0 0 0-.63-.48l-8 2.22a.5.5 0 0 0-.37.48v8.12m0-5.5 9-2.5"/></g></svg>抖音</button>
         <button class="side-item" data-view="kuaishou"><svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 12.5V1.5a.5.5 0 0 1 .85-.37l8 7a.5.5 0 0 1 0 .74l-8 7a.5.5 0 0 1-.85-.37"/></svg>快手</button>
-        <button class="side-item" data-view="music"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.25 13.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/><path d="M6.75 11V.5a5.5 5.5 0 0 1 5.5 5.5"/></g></svg>音乐</button>
+        <button class="side-item" data-view="lyric"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.25 13.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/><path d="M6.75 11V.5a5.5 5.5 0 0 1 5.5 5.5"/></g></svg>音乐</button>
         <button class="side-item" data-view="movie"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12.5V1.5h9a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1h-9z"/><path d="M2.5 4.5h11M5 1.5l-1 3M8.5 1.5l-1 3M12 1.5l-1 3"/></g><path d="M6 6.2v2.6l2.3-1.3z" fill="currentColor" stroke="none"/></svg>影视</button>
         <button class="side-item" data-view="uc"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M7 .5 1.5 3.5v7L7 13.5l5.5-3v-7z"/><path d="M7 .5v13M1.5 3.5 12.5 10.5M12.5 3.5 1.5 10.5"/></g></svg>UC</button>
       </div>
@@ -223,6 +223,67 @@
             <button class="btn btn-gray" id="musicPlaylistBtn" style="flex:1">我的歌单</button>
             <button class="btn btn-gray" id="musicImportBtn" style="flex:1">歌单 ID 导入</button>
             <button class="btn btn-gray" id="musicLoginBtn" style="flex:1">扫码登录网易云</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===== 音乐歌词界面 ===== -->
+      <section class="view" id="view-lyric">
+        <div class="lyric-ui">
+          <div class="lyric-top">
+            <div class="lyric-title"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.25 13.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"/><path d="M6.75 11V.5a5.5 5.5 0 0 1 5.5 5.5"/></g></svg> 音乐歌词</div>
+            <div class="lyric-actions">
+              <button class="btn btn-ghost" id="lyToListBtn">搜索 / 列表</button>
+              <button class="btn btn-ghost" id="lyDesktopBtn">桌面歌词</button>
+              <div class="lyric-gear">
+                <button class="btn btn-ghost" id="lyColorBtn">⚙ 歌词颜色</button>
+                <div class="lyric-color-pop" id="lyColorPop" hidden>
+                  <div class="lcp-title">歌词颜色</div>
+                  <div class="lcp-swatches" id="lySwatches"></div>
+                  <label class="lcp-row">自定义颜色 <input type="color" id="lyColorCustom" value="#d4608a"></label>
+                  <label class="lcp-row">字号 <input type="range" id="lyFontSize" min="16" max="36" value="24"></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lyric-body">
+            <div class="lyric-left">
+              <div class="lyric-bigicon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 18V5l10-2v13"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <circle cx="16" cy="16" r="3"/>
+                </svg>
+                <div class="lbi-ring"></div>
+              </div>
+              <div class="player ly-player" id="lyPlayer">
+                <img class="cover-img" id="lyCover" alt="封面" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23d4608a'/%3E%3Cstop offset='1' stop-color='%23b45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='96' height='96' rx='12' fill='url(%23a)'/%3E%3Ccircle cx='48' cy='48' r='26' fill='rgba(20,12,10,.85)'/%3E%3Ccircle cx='48' cy='48' r='7' fill='%23f7e6c4'/%3E%3C/svg%3E">
+                <div class="p-info">
+                  <div class="p-name"><span id="lyName">未在播放</span> <span class="platform-tag">音乐</span></div>
+                  <div class="p-sub" id="lySub">搜索后点击歌曲即可播放</div>
+                  <div class="p-progress" id="lyProgress" data-scrub><div class="p-fill pink" id="lyFill" style="width:0%"></div><div class="p-thumb" id="lyThumb" style="left:0%"></div><div class="p-bubble" id="lyBubble">00:00</div></div>
+                  <div class="p-time"><span id="lyCur">00:00</span><span id="lyDur">00:00</span></div>
+                </div>
+                <div class="p-controls">
+                  <button class="p-btn" id="lyPrev" title="上一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M11.5 2.5v9L4.5 7zM3 2.5v9"/></svg></button>
+                  <label class="pp-btn" title="播放 / 暂停">
+                    <input type="checkbox" id="lyPlay">
+                    <svg class="pp-play" viewBox="0 0 24 24"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86z"/></svg>
+                    <svg class="pp-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                  </label>
+                  <button class="p-btn" id="lyNext" title="下一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 2.5v9L9.5 7zM11 2.5v9"/></svg></button>
+                  <button class="p-btn" id="lyDl" title="下载"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/><path d="M7 13.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13"/></g></svg></button>
+                </div>
+              </div>
+            </div>
+
+            <div class="lyric-right">
+              <div class="lyric-song" id="lySongInfo">暂无播放</div>
+              <div class="lyric-lines" id="lyricLines">
+                <div class="lyric-empty">暂无歌词，播放歌曲后自动加载</div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -486,34 +547,6 @@
       </div>
 
     </main>
-  </div>
-</div>
-
-<!-- 吸底全局播放栏 -->
-<div class="global-player">
-  <button class="gp-grip" id="gpGrip" title="拖动以移动播放栏"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
-  <div class="gp-tabs">
-    <button class="gp-tab active" data-gp="music">音乐</button>
-    <button class="gp-tab" data-gp="movie">影视</button>
-    <button class="gp-tab" data-gp="uc">UC</button>
-  </div>
-  <img class="cover-img" id="gpCover" alt="正在播放" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23d4608a'/%3E%3Cstop offset='1' stop-color='%23b45309'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='96' height='96' rx='12' fill='url(%23a)'/%3E%3Ccircle cx='48' cy='48' r='26' fill='rgba(20,12,10,.85)'/%3E%3Ccircle cx='48' cy='48' r='7' fill='%23f7e6c4'/%3E%3C/svg%3E">
-  <div class="p-info" style="flex:1.2">
-    <div class="p-name"><span id="gpName">未在播放</span> <span class="platform-tag" id="gpTag">音乐</span></div>
-    <div class="p-sub" id="gpSub">—</div>
-    <div class="p-progress" id="gpProgress" data-scrub><div class="p-fill pink" id="gpFill" style="width:0%"></div><div class="p-thumb" id="gpThumb" style="left:0%"></div><div class="p-bubble" id="gpBubble">00:00</div></div>
-    <div class="p-time"><span id="gpCur">00:00</span><span id="gpDur">00:00</span></div>
-  </div>
-  <div class="p-controls">
-    <button class="p-btn" id="gpPrev" title="上一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M11.5 2.5v9L4.5 7zM3 2.5v9"/></svg></button>
-    <label class="pp-btn" title="播放 / 暂停">
-      <input type="checkbox" id="gpPP">
-      <svg class="pp-play" viewBox="0 0 24 24"><path d="M8 5.14v13.72a1 1 0 0 0 1.5.86l11-6.86a1 1 0 0 0 0-1.72l-11-6.86a1 1 0 0 0-1.5.86z"/></svg>
-      <svg class="pp-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-    </label>
-    <button class="p-btn" id="gpNext" title="下一首"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M2.5 2.5v9L9.5 7zM11 2.5v9"/></svg></button>
-    <button class="p-btn" id="gpMinBtn" title="缩小播放栏"><svg class="ic-min" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M3 7h8"/></svg><svg class="ic-exp" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="display:none"><rect x="3" y="3" width="8" height="8" rx="1.2"/></svg></button>
-    <button class="p-btn" id="gpClose" title="关闭播放栏"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" d="m4 4 6 6m0-6-6 6"/></svg></button>
   </div>
 </div>
 

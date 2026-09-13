@@ -17,6 +17,10 @@ contextBridge.exposeInMainWorld('dl', {
   onCmd: (cb) => {
     ipcRenderer.on('desktop-lyrics:cmd', (_e, p) => cb(p));
   },
+  // 接收歌词颜色（与应用内设置联动） color: '#rrggbb'
+  onColor: (cb) => {
+    ipcRenderer.on('desktop-lyrics:color', (_e, color) => cb(color));
+  },
   // 弹出原生右键菜单（携带当前设置快照用于勾选态）
   showMenu: (state) => ipcRenderer.send('lyrics:menu', state),
   // 关闭桌面歌词

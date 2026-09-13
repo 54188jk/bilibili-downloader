@@ -475,6 +475,11 @@ ipcMain.on('desktop-lyrics:tick', (_evt, payload) => {
   if (isLyricsOpen()) lyricsWin.webContents.send('desktop-lyrics:tick', payload);
 });
 
+// 主窗口渲染进程 → 桌面歌词窗口：歌词颜色（与应用内设置联动）
+ipcMain.on('desktop-lyrics:setColor', (_evt, color) => {
+  if (isLyricsOpen()) lyricsWin.webContents.send('desktop-lyrics:color', color);
+});
+
 // =====  应用版本号 =====
 ipcMain.handle('app:version', () => app.getVersion());
 
@@ -1607,11 +1612,17 @@ ipcMain.handle('auth:login', async () => {
     await win.loadURL('https://passport.bilibili.com/login');
     startLoginPoll();
     return new Promise(resolve => {
+      // 保存 resolve，登录成功时由轮询逻辑正确返回 {ok:true}
+      lastLoginResolve = resolve;
       win.on('closed', () => {
         stopLoginPoll();
         loginWindow = null;
-        // 用户主动关闭登录窗口
-        resolve({ ok: false, canceled: true });
+        // 若登录已成功并 resolve，lastLoginResolve 已被置空，此处不重复 resolve；
+        // 否则视为用户主动关闭 / 超时取消
+        if (lastLoginResolve) {
+          lastLoginResolve({ ok: false, canceled: true });
+          lastLoginResolve = null;
+        }
       });
     });
   } catch (e) {
@@ -1638,12 +1649,18 @@ function startLoginPoll() {
         const user = await bili.getUserInfo();
         if (user && user.isLogin) {
           saveAuth({ cookie: cookieHeader, loginAt: Date.now() });
-          if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close();
-          stopLoginPoll();
+          // 先以成功结果 resolve：避免随后 loginWindow.close() 触发的 closed
+          // 事件把 Promise 覆盖成 {ok:false, canceled:true}（即"未知错误"）
+          if (lastLoginResolve) {
+            lastLoginResolve({ ok: true, user });
+            lastLoginResolve = null;
+          }
           // 触发渲染端成功提示
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('auth:loginSuccess', user);
           }
+          stopLoginPoll();
+          if (loginWindow && !loginWindow.isDestroyed()) loginWindow.close();
         }
       }
     } catch (e) {
