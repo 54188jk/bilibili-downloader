@@ -104,6 +104,9 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('desktop-lyrics:musicCmd', handler);
   },
 
+  // ===== 视频背景 =====
+  bgScanVideos: (dir) => ipcRenderer.invoke('bg:scanVideos', dir),
+
   // ===== B 站登录 =====
   login: () => ipcRenderer.invoke('auth:login'),
   logout: () => ipcRenderer.invoke('auth:logout'),

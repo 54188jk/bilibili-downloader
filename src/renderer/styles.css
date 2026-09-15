@@ -647,4 +647,15 @@ body.dark .song-row.playing{border-color:rgba(10,132,255,.4)}
 .mock-bar{position:fixed;top:0;left:0;right:0;z-index:400;display:flex;align-items:center;justify-content:space-between;padding:7px 16px;background:rgba(0,0,0,.82);color:rgba(255,255,255,.85);font-size:12px;backdrop-filter:blur(14px)}
 .mock-bar .pick{color:#8ED0FF}
 
+/* ===== 视频背景（苹果磨砂质感：视频垫底，内容半透明透出） ===== */
+.bg-video{position:fixed;inset:0;width:100vw;height:100vh;object-fit:cover;z-index:0;pointer-events:none;opacity:0;display:none;transition:opacity .8s var(--ease);background:#000}
+body.video-bg-on .bg-video{display:block;opacity:.9}
+body.video-bg-on .content{background:rgba(238,238,242,.62)}
+body.dark.video-bg-on .content{background:rgba(20,20,22,.68)}
+/* 开启背景时标题栏/侧边栏略加深，保证亮部画面下文字对比度 */
+body.video-bg-on .titlebar{background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(245,245,247,.78))}
+body.dark.video-bg-on .titlebar{background:linear-gradient(180deg,rgba(30,30,32,.88),rgba(24,24,26,.82))}
+body.video-bg-on .sidebar{background:linear-gradient(180deg,rgba(255,255,255,.85),rgba(245,245,247,.78))}
+body.dark.video-bg-on .sidebar{background:linear-gradient(180deg,rgba(30,30,32,.88),rgba(24,24,26,.82))}
+
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}

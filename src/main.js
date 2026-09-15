@@ -1594,6 +1594,20 @@ ipcMain.handle('auth:status', async () => {
   }
 });
 
+// ===== 视频背景：扫描本地视频文件夹 =====
+ipcMain.handle('bg:scanVideos', async (_e, dir) => {
+  try {
+    const entries = await fs.promises.readdir(String(dir || ''), { withFileTypes: true });
+    const exts = ['.mp4', '.webm', '.mkv', '.mov', '.m4v', '.avi'];
+    const videos = entries
+      .filter((x) => x.isFile() && exts.includes(path.extname(x.name).toLowerCase()))
+      .map((x) => path.join(String(dir), x.name));
+    return { ok: true, videos };
+  } catch (err) {
+    return { ok: false, videos: [], error: err.message };
+  }
+});
+
 ipcMain.handle('auth:login', async () => {
   try {
     if (loginWindow && !loginWindow.isDestroyed()) {
@@ -1609,6 +1623,9 @@ ipcMain.handle('auth:login', async () => {
     });
     loginWindow = win;
     win.setMenuBarVisibility(false);
+    // 伪装正常 Chrome UA：B 站 passport 风控会读 navigator.userAgent，
+    // Electron 默认 UA 带 Electron/xx 标识会被判定"登录环境异常"
+    win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
     await win.loadURL('https://passport.bilibili.com/login');
     startLoginPoll();
     return new Promise(resolve => {

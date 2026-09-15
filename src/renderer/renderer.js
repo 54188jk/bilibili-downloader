@@ -176,6 +176,7 @@ document.querySelectorAll('.switch[data-key]').forEach((el) => {
     obj[el.dataset.key] = el.classList.contains('on');
     localStorage.setItem(SWITCH_KEY, JSON.stringify(obj));
     if (el.dataset.key === 'lyrics' && App.desktopLyricsToggle) App.desktopLyricsToggle();
+    if (el.dataset.key === 'videoBg') applyVideoBg(el.classList.contains('on'));
   });
 });
 
@@ -1809,3 +1810,59 @@ if (App.onDyLoginSuccess) {
     }
   });
 }
+
+/* ============================================================
+ * 视频背景：内容区轮播本地视频（设置 → 外观 → 视频背景）
+ * - 默认目录可经 localStorage(biligrab.bgdir) 覆盖
+ * - 播完自动轮播下一个，加载失败自动跳过
+ * ============================================================ */
+const BG_DIR_KEY = 'biligrab.bgdir';
+const BG_DEFAULT_DIR = 'C:\\Users\\Administrator\\Desktop\\10_15_视频\\视频';
+let bgVideos = [];
+let bgIndex = 0;
+
+function bgFileUrl(p) {
+  return 'file:///' + String(p).replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/');
+}
+
+function bgPlayCurrent() {
+  const video = $('bgVideo');
+  if (!video || !bgVideos.length) return;
+  bgIndex = ((bgIndex % bgVideos.length) + bgVideos.length) % bgVideos.length;
+  video.src = bgFileUrl(bgVideos[bgIndex]);
+  const p = video.play();
+  if (p && p.catch) p.catch(() => {});
+}
+
+async function bgStart() {
+  const video = $('bgVideo');
+  if (!video) return;
+  if (!bgVideos.length) {
+    const dir = localStorage.getItem(BG_DIR_KEY) || BG_DEFAULT_DIR;
+    try {
+      const r = App.bgScanVideos ? await App.bgScanVideos(dir) : null;
+      bgVideos = (r && r.ok && r.videos) || [];
+    } catch (_) { bgVideos = []; }
+    if (!bgVideos.length) return;
+    bgIndex = 0;
+    video.addEventListener('ended', () => { bgIndex = (bgIndex + 1) % bgVideos.length; bgPlayCurrent(); });
+    video.addEventListener('error', () => { if (bgVideos.length > 1) { bgIndex = (bgIndex + 1) % bgVideos.length; bgPlayCurrent(); } });
+  }
+  bgPlayCurrent();
+}
+
+function applyVideoBg(on) {
+  document.body.classList.toggle('video-bg-on', !!on);
+  const video = $('bgVideo');
+  if (!video) return;
+  if (on) {
+    bgStart();
+  } else {
+    try { video.pause(); } catch (_) {}
+    video.removeAttribute('src');
+    try { video.load(); } catch (_) {}
+  }
+}
+
+// 启动时按开关状态初始化
+applyVideoBg(switchOn('videoBg'));
