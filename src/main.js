@@ -18,6 +18,7 @@ const uc = require('./uc');
 const musicApi = require('./music');
 const movieApi = require('./movie-api');
 const capture = require('./capture/capture');
+const { grabDouyinVideo } = require('./douyin-grab');
 
 // 初始化抖音私信模块：复用主进程已有的抖音登录态与 cookie 注入能力
 douyinIm.init({
@@ -764,6 +765,7 @@ ipcMain.handle('video:parseInput', async (_evt, text) => {
             cover: r.data.cover,
             videoUrl: r.data.videoUrl,
             author: r.data.author,
+            stats: r.data.stats || null,
             source: r.source || 'local',
             url,
           });
@@ -844,6 +846,7 @@ ipcMain.handle('douyin:parse', async (_evt, text) => {
             cover: r.data.cover,
             videoUrl: r.data.videoUrl,
             author: r.data.author,
+            stats: r.data.stats || null,
             source: r.source || 'local',
             url,
           });
@@ -894,6 +897,7 @@ ipcMain.handle('douyin:parseAweme', async (_evt, awemeId) => {
           cover: r.data.cover,
           videoUrl: r.data.videoUrl,
           author: r.data.author,
+          stats: r.data.stats || null,
           source: r.source,
         },
       };
@@ -985,144 +989,40 @@ function grabKuaishouVideo(photoId) {
   });
 }
 
-// ============================================
-// 抖音视频解析（隐藏窗口加载 PC 页面，经 CDP 拦截官方 aweme/detail 接口
-// 拿到无水印 play_addr + 标题/作者/封面，完全本地、不依赖第三方接口）
-// ============================================
-function grabDouyinVideo(awemeId) {
-  return new Promise((resolve) => {
-    const win = new BrowserWindow({
-      show: false,
-      width: 1100,
-      height: 750,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
-    });
-    win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) { settled = true; try { win.destroy(); } catch (_) {} resolve({ ok: false, error: '抖音页面加载超时' }); }
-    }, 30000);
-
-    function finish(obj) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try { win.destroy(); } catch (_) {}
-      resolve(obj);
-    }
-
-    const dbg = win.webContents.debugger;
-    try { dbg.attach('1.3'); dbg.sendCommand('Network.enable'); } catch (_) {}
-
-    // 收集 detail 接口返回
-    let detail = null;
-    const onMsg = async (_e, method, params) => {
-      if (settled || detail) return;
-      if (method === 'Network.responseReceived') {
-        const url = (params.response && params.response.url) || '';
-        if (/\/aweme\/v1\/web\/aweme\/detail\//.test(url)) {
-          try {
-            const { body } = await dbg.sendCommand('Network.getResponseBody', { requestId: params.requestId });
-            const data = JSON.parse(body);
-            const detailObj = data.aweme_detail || data.data || {};
-            if (detailObj && detailObj.video && detailObj.video.play_addr) {
-              detail = detailObj;
-              // 取无水印地址（play_addr 而非 playwm）
-              const list = (detailObj.video.play_addr.url_list || []).map(u =>
-                u.replace(/\/playwm\//, '/play/').replace(/^http:/, 'https:'));
-              const videoUrl = list.find(u => /douyinvod|douyinstatic|\.mp4|v\d+\-web/.test(u)) || list[0];
-              if (!videoUrl) return;
-              const coverList = detailObj.video.cover && detailObj.video.cover.url_list || [];
-              finish({ ok: true, data: {
-                awemeId: detailObj.aweme_id || awemeId,
-                title: detailObj.desc || '抖音视频',
-                cover: (coverList[0] || '').replace(/^http:/, 'https:'),
-                videoUrl,
-                author: (detailObj.author && detailObj.author.nickname) || '',
-              } });
-            }
-          } catch (e) { /* 忽略，交由其它信号源 */ }
-        }
-      }
-    };
-    dbg.on('message', onMsg);
-
-    // 后备信号源：若 detail 拦截不到，轮询 video src 是否为 http 直链
-    let poll = null;
-    win.webContents.once('dom-ready', () => {
-      let tries = 0;
-      poll = setInterval(async () => {
-        tries++;
-        try {
-          const r = await win.webContents.executeJavaScript(`(() => {
-            const out = { url:'', title:'', cover:'', author:'', dead:false };
-            const v = document.querySelector('video');
-            if (v) out.url = v.currentSrc || v.src || '';
-            if (out.url && !/^https?:/i.test(out.url)) out.url = '';
-            if (out.url) out.url = out.url.replace(/^http:/,'https:');
-            const h1 = document.querySelector('h1');
-            if (h1 && h1.textContent.trim()) out.title = h1.textContent.trim().slice(0,120);
-            const nick = document.querySelector('[data-e2e="video-author-name"], [class*="nickname"], .author-info .name');
-            if (nick) out.author = nick.textContent.trim().slice(0,40);
-            const cis = document.querySelectorAll('img[src*="pcweb_cover"]');
-            for (const im of cis) { if (im.src) { out.cover = im.src.replace(/^http:/,'https:'); break; } }
-            const bodyTxt = (document.body ? document.body.innerText : '').slice(0,600);
-            if (/作品.{0,6}(不存在|已删除|删除)|页面不存在|内容不存在|内容已被作者删除|视频不见了|该作品/.test(bodyTxt)) out.dead = true;
-            return out;
-          })()`);
-          if (r && r.url) {
-            clearInterval(poll);
-            finish({ ok: true, data: { awemeId, title: r.title || '抖音视频', cover: r.cover || '', videoUrl: r.url, author: r.author || '' } });
-          } else if (r && r.dead) {
-            clearInterval(poll);
-            finish({ ok: false, error: '视频不存在或已被删除' });
-          } else if (tries > 18) {
-            clearInterval(poll);
-            finish({ ok: false, error: '未获取到视频信息' });
-          }
-        } catch (e) {
-          if (tries > 18) {
-            clearInterval(poll);
-            finish({ ok: false, error: '抓取失败：' + e.message });
-          }
-        }
-      }, 600);
-    });
-
-    win.webContents.once('did-fail-load', (_e, code, desc) => {
-      if (!settled) finish({ ok: false, error: '抖音页面加载失败：' + desc });
-    });
-
-    win.loadURL('https://www.douyin.com/video/' + awemeId).catch(() => {});
-  });
-}
-
-// 解析抖音分享链接：本地窗口抓取优先（稳定、无水印），失败回落 tjit 接口
+// 解析抖音分享链接：轻量分享页优先（亚秒级）→ 本地窗口抓取（已拦截重资源）→ tjit 兜底
 async function resolveDouyinShare(url) {
-  // 先尝试从链接/短链提取 aweme_id
+  // 1) 提取 aweme_id（链接自带则直接跳过短链重定向解析，省 2~5 次串行请求）
   let awemeId = douyin.extractAwemeId(url) || null;
-  try {
-    const resolved = await douyin.resolveUrl(url);
-    if (!awemeId) awemeId = resolved.awemeId;
-  } catch (_) {}
-
-  // 没有 id：无法本地方案，直接走 tjit 接口
   if (!awemeId) {
-    const r = await douyin.parseShare(url);
-    return r.ok ? { ok: true, data: r.data, source: r.source } : { ok: false, error: r.error };
+    try {
+      const resolved = await douyin.resolveUrl(url);
+      awemeId = resolved.awemeId || null;
+    } catch (_) {}
   }
 
-  // 本地窗口抓取
-  try {
-    const r = await grabDouyinVideo(awemeId);
-    if (r.ok) return { ok: true, data: r.data, source: 'local' };
-    // 本地失败，记录原因再做 tjit 兜底
-    const fb = await douyin.parseShare(url);
-    return fb.ok ? { ok: true, data: fb.data, source: fb.source } : { ok: false, error: fb.error + ' （本地抓取失败：' + r.error + '）' };
-  } catch (e) {
-    const fb = await douyin.parseShare(url);
-    return fb.ok ? { ok: true, data: fb.data, source: fb.source } : { ok: false, error: fb.error };
+  // 2) 快路径：iesdouyin 轻量分享页（单次请求约 0.5s，含统计数据；被风控时瞬间失败不拖时间）
+  if (awemeId) {
+    const fast = await douyin.parseByAwemeId(awemeId);
+    if (fast.ok) return { ok: true, data: fast.data, source: 'iesdouyin' };
   }
+
+  // 3) 本地隐藏窗口抓取（真实浏览器环境过风控，最稳）
+  if (awemeId) {
+    try {
+      const r = await grabDouyinVideo(awemeId);
+      if (r.ok) return { ok: true, data: r.data, source: 'local' };
+      // 本地失败，记录原因再做兜底
+      const fb = await douyin.parseShare(url);
+      return fb.ok ? { ok: true, data: fb.data, source: fb.source } : { ok: false, error: fb.error + ' （本地抓取失败：' + r.error + '）' };
+    } catch (e) {
+      const fb = await douyin.parseShare(url);
+      return fb.ok ? { ok: true, data: fb.data, source: fb.source } : { ok: false, error: fb.error };
+    }
+  }
+
+  // 4) 没有 aweme_id：只能走 parseShare（tjit / 分享页兜底）
+  const r = await douyin.parseShare(url);
+  return r.ok ? { ok: true, data: r.data, source: r.source } : { ok: false, error: r.error };
 }
 
 // ===== 单独解析快手分享链接（窗口抓取） =====

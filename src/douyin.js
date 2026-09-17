@@ -33,6 +33,11 @@ function request(url, opts = {}) {
     }, opts.headers || {});
 
     const req = lib.get(url, { headers }, res => {
+      // 3xx 重定向：立即丢弃响应体（原实现会把中间页整页 body 下载完才返回，白白拖慢解析）
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve({ status: res.statusCode, headers: res.headers, finalUrl: url, body: '' });
+      }
       let data = '';
       const maxLen = 5 * 1024 * 1024;
       res.on('data', c => { data += c; if (data.length > maxLen) res.destroy(); });
@@ -44,16 +49,19 @@ function request(url, opts = {}) {
       }));
     });
     req.on('error', reject);
-    req.setTimeout(20000, () => req.destroy(new Error('请求超时')));
+    req.setTimeout(opts.timeoutMs || 20000, () => req.destroy(new Error('请求超时')));
   });
 }
 
-// 跟随重定向拿最终地址
+// 跟随重定向拿最终地址（每跳限时 8s，短链解析不再长时间卡顿）
 async function followRedirect(url, depth = 0) {
   if (depth > 5) throw new Error('重定向次数过多');
-  const r = await request(url, { headers: {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  }});
+  const r = await request(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    },
+    timeoutMs: 8000,
+  });
   const loc = r.headers.location;
   if (loc && r.status >= 300 && r.status < 400) {
     const next = loc.startsWith('http') ? loc : new URL(loc, url).toString();
@@ -188,6 +196,16 @@ async function fetchShareData(awemeId) {
   const desc = pick(['"desc"', '"Desc"']);
   const author = pick(['"author"']);
   const title = pick(['"title"']);
+  // 统计数据（点赞/评论/收藏/转发/播放/弹幕），分享页未返回时为 null
+  const st = pick(['"statistics"']);
+  const stats = (st && typeof st === 'object') ? {
+    play: st.play_count || 0,
+    digg: st.digg_count || 0,
+    comment: st.comment_count || 0,
+    collect: st.collect_count || 0,
+    share: st.share_count || 0,
+    danmaku: st.danmaku_count || 0,
+  } : null;
 
   let url = '';
   if (playAddr && Array.isArray(playAddr.url_list) && playAddr.url_list.length) {
@@ -209,6 +227,7 @@ async function fetchShareData(awemeId) {
     cover,
     videoUrl: url,
     author: authorName,
+    stats,
   };
 }
 
@@ -310,15 +329,14 @@ async function parseByAwemeId(awemeId) {
 // ========================
 async function parseShare(shareUrl) {
   try {
-    // ---- 主方案：tjit 免费接口 ----
-    try {
-      const data = await parseViaTjit(shareUrl);
-      if (data.videoUrl) return { ok: true, data, source: 'tjit' };
-    } catch (e) {
-      if (e.message === 'CONFIG_MISSING_KEY') {
-        return { ok: false, error: '未配置抖音解析密钥（请在 config.json 填写 douyinKey，免费申请地址 https://api.tjit.net/user/key）' };
-      }
-      // 其他错误（key 无效、接口异常等）继续走备选
+    // ---- 主方案：tjit 免费接口（仅在配置了 douyinKey 时启用）----
+    // 注意：无 key 不能直接报错返回，否则备选线路永远没有机会跑（曾导致未配置密钥时全部解析失败）
+    const cfg = loadConfig();
+    if ((cfg.douyinKey || '').trim()) {
+      try {
+        const data = await parseViaTjit(shareUrl);
+        if (data.videoUrl) return { ok: true, data, source: 'tjit' };
+      } catch (_) { /* key 无效、接口异常等继续走备选 */ }
     }
 
     // ---- 备选方案：iesdouyin 分享页抓取 ----

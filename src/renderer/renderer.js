@@ -250,6 +250,11 @@ function createTaskEl(task) {
       <div class="task-bar"><div class="task-fill" style="width:0%"></div></div>
     </div>
     <span class="task-meta">0%</span>`;
+  // 下载完成后点击任务条直接打开文件（视频/音频/图片通用）
+  el.addEventListener('click', () => {
+    const t = state.tasks.get(task.id);
+    if (t && t.status === 'done' && t.path) App.openPath(t.path);
+  });
   return el;
 }
 function addTask(task) {
@@ -270,7 +275,11 @@ function updateTask(id, patch) {
   if (t.status === 'done') {
     ic.className = 'task-ic ok';
     fill.classList.add('ok');
-    meta.textContent = '完成';
+    meta.textContent = t.path ? '完成 · 点击观看' : '完成';
+    if (t.path) {
+      el.classList.add('done');
+      el.title = '点击观看：' + t.path;
+    }
   } else if (t.status === 'error') {
     ic.className = 'task-ic err';
     fill.style.background = 'var(--err)';
@@ -491,7 +500,7 @@ async function startBiliDownload(mode) {
     addTask({ id: taskId, name: filename, progress: 0, status: 'running' });
     const r = await App.downloadStart({ url: it.videoUrl, filename, saveDir, referer: 'https://www.douyin.com/', taskId });
     if (!r.ok) { updateTask(taskId, { status: 'error', error: r.error }); toast('下载失败：' + r.error, 'error'); return; }
-    updateTask(taskId, { progress: 100, status: 'done' });
+    updateTask(taskId, { progress: 100, status: 'done', path: r.path });
     toast('下载完成：' + filename);
     if (switchOn('openAfter')) App.showInFolder(r.path);
     return;
@@ -508,7 +517,7 @@ async function startBiliDownload(mode) {
       const taskId = 'img_' + Date.now() + '_' + i;
       addTask({ id: taskId, name: filename, progress: 0, status: 'running' });
       const r = await App.downloadStart({ url: imgs[i], filename, saveDir: dir, referer: 'https://www.bilibili.com/', taskId });
-      if (r.ok) { ok++; updateTask(taskId, { progress: 100, status: 'done' }); }
+      if (r.ok) { ok++; updateTask(taskId, { progress: 100, status: 'done', path: r.path }); }
       else updateTask(taskId, { status: 'error', error: r.error });
     }
     toast('图片下载完成：成功 ' + ok + '/' + imgs.length + ' 张');
@@ -584,7 +593,7 @@ async function startBiliDownload(mode) {
     if (!savedPath) throw new Error('未获取到下载路径');
     const st = await App.fsStat(savedPath);
     if (!st.ok || !st.exists || st.size < 1024) throw new Error('文件校验失败（可能下载不完整）');
-    updateTask(taskId, { progress: 100, status: 'done' });
+    updateTask(taskId, { progress: 100, status: 'done', path: savedPath });
     toast('下载完成：' + filename);
     if (switchOn('openAfter')) App.showInFolder(savedPath);
   } catch (err) {
@@ -604,11 +613,21 @@ function renderShortResults(box, items) {
     const row = document.createElement('div');
     row.className = 'task-item pick' + (idx === 0 ? ' active' : '');
     row.dataset.idx = String(idx);
+    // 抖音等平台返回的互动数据（点赞/评论/收藏/转发/弹幕）
+    const s = it.stats;
+    const statText = s ? [
+      '赞 ' + formatNum(s.digg),
+      '评 ' + formatNum(s.comment),
+      '藏 ' + formatNum(s.collect),
+      '转 ' + formatNum(s.share),
+      s.danmaku ? '弹幕 ' + formatNum(s.danmaku) : '',
+    ].filter(Boolean).join(' · ') : '';
     row.innerHTML = `
       <div class="task-ic ok"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="m3 7.5 2.5 2.5L11 4.5"/></svg></div>
       <div class="task-main">
         <div class="task-name">${escapeHtml(it.title || '未命名')}</div>
         <div class="task-sub">${escapeHtml(it.author || '')} · ${escapeHtml(it.id || '')}</div>
+        ${statText ? `<div class="task-sub task-stats">${escapeHtml(statText)}</div>` : ''}
       </div>`;
     row.addEventListener('click', () => {
       box.querySelectorAll('.task-item').forEach((x) => x.classList.remove('active'));
@@ -660,11 +679,11 @@ async function downloadShort(items, box, mode) {
     const ex = await App.extractAudio({ inputPath: r.path, outputName: out, saveDir });
     await App.fsDelete(r.path);
     if (!ex.ok) { updateTask(taskId, { status: 'error', error: ex.error }); return; }
-    updateTask(taskId, { progress: 100, status: 'done', name: out });
+    updateTask(taskId, { progress: 100, status: 'done', name: out, path: ex.path });
     toast('已提取音频：' + out);
     return;
   }
-  updateTask(taskId, { progress: 100, status: 'done' });
+  updateTask(taskId, { progress: 100, status: 'done', path: r.path });
   toast('下载完成：' + filename);
   if (switchOn('openAfter')) App.showInFolder(r.path);
 }
@@ -1420,17 +1439,22 @@ async function loadHistory() {
     total += Number(it.size) || 0;
     const row = document.createElement('div');
     row.className = 'hist-item';
+    const full = (it.dir && it.filename) ? App.pathJoin(it.dir, it.filename) : '';
     row.innerHTML = `
       <div class="hist-thumb"></div>
       <div class="hist-main">
         <div class="hist-name">${escapeHtml(it.title || it.filename || '未命名')}</div>
         <div class="hist-sub">${escapeHtml(it.kind || '')}${it.time ? ' · ' + escapeHtml(new Date(it.time).toLocaleString()) : ''}</div>
       </div>
-      <span class="hist-size">${formatSize(it.size)}</span>`;
-    if (it.dir && it.filename) {
+      <span class="hist-size">${formatSize(it.size)}</span>
+      ${full ? '<button class="hist-folder" title="在文件夹中显示"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.5 4c0-.8.7-1.5 1.5-1.5h2.2l1.3 1.5H11c.8 0 1.5.7 1.5 1.5v5c0 .8-.7 1.5-1.5 1.5H3c-.8 0-1.5-.7-1.5-1.5V4Z"/></svg></button>' : ''}`;
+    if (full) {
       row.style.cursor = 'pointer';
-      row.title = '点击在文件夹中显示';
-      row.addEventListener('click', () => App.showInFolder(App.pathJoin(it.dir, it.filename)));
+      row.title = '点击观看';
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.hist-folder')) { App.showInFolder(full); return; }
+        App.openPath(full);
+      });
     }
     box.appendChild(row);
   });

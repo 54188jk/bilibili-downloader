@@ -282,6 +282,11 @@ body.dark .seg button.active{background:rgba(60,62,66,.85);color:#fff}
 .task-item.pick:hover{background:var(--row-hover);border-color:var(--border)}
 .task-item.pick.active{background:var(--selected-bg);border-color:rgba(0,122,255,.3)}
 body.dark .task-item.pick.active{border-color:rgba(10,132,255,.45)}
+/* 下载完成：点击任务条直接观看 */
+.task-item.done{cursor:pointer}
+.task-item.done:hover{background:var(--row-hover);border-color:var(--border)}
+.task-item.done .task-meta{color:var(--accent)}
+.task-stats{color:var(--accent)}
 
 /* 播放器 */
 .player{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:var(--r-m);border:1px solid var(--separator);background:var(--content-bg)}
@@ -391,6 +396,9 @@ body.dark .song-row.playing{border-color:rgba(10,132,255,.4)}
 .hist-name{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hist-sub{font-size:11px;color:var(--ink-3);margin-top:2px;font-variant-numeric:tabular-nums}
 .hist-size{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hist-folder{width:26px;height:26px;border-radius:var(--r-s);border:1px solid var(--border);background:transparent;color:var(--ink-3);display:grid;place-items:center;cursor:pointer;flex-shrink:0;padding:0;transition:all .15s var(--ease)}
+.hist-folder:hover{color:var(--accent);border-color:rgba(0,122,255,.3);background:var(--selected-bg)}
+body.dark .hist-folder:hover{border-color:rgba(10,132,255,.45)}
 
 /* ===== 播放器控件按钮（视图内本地播放器） ===== */
 .p-btn svg{width:14px;height:14px}
