@@ -105,20 +105,31 @@ async function parseVideo(bvid) {
  * @param {number|string} cid
  * @param {number} qn 画质代码：0=默认, 64=720P, 80=1080P, 112=1080P+, 116=1080P60, 120=4K ...
  */
-async function getPlayUrl(bvid, cid, qn = 0) {
-  // fnval=16: DASH 格式（音视频分离），支持 1080P+/4K/8K/HDR/杜比
-  // fnval=1:  FLV 格式（最高仅 720P）
-  // 四个都请求：先要 DASH（高画质），再要 FLV（兜底）
-  // 请求 qn=120(4K) 让服务器返回最高可用水印列表
-  const fnval = 16; // DASH
-  const qnParam = qn || 120; // 默认请求 4K，服务器会按权限降级
-
+async function fetchPlayurl(bvid, cid, qn, fnval) {
   const url =
     `https://api.bilibili.com/x/player/playurl?bvid=${encodeURIComponent(bvid)}` +
-    `&cid=${encodeURIComponent(cid)}&qn=${qnParam}&fnval=${fnval}&fnver=0&fourk=1`;
-  const json = await fetchJson(url);
-  if (json.code !== 0) {
-    throw new Error(json.message || `code=${json.code}`);
+    `&cid=${encodeURIComponent(cid)}&qn=${qn}&fnval=${fnval}&fnver=0&fourk=1`;
+  return fetchJson(url);
+}
+
+async function getPlayUrl(bvid, cid, qn = 0) {
+  // fnval=16: DASH 格式（音视频分离），支持 1080P+/4K/8K/HDR/杜比
+  // fnval=1:  FLV 格式（durl 单流，最高仅 720P）
+  // 注意：两位置不能合并成 fnval=17 一次请求 —— B 站对同时带两位的请求只返回 durl、
+  // 丢弃 dash 字段（2026-09 实测回归，导致高画质 DASH 整体失效）。
+  // 因此先请求 DASH（主路径），仅当 dash 缺失或请求失败时，再用 fnval=1 发 FLV 兜底请求。
+  const qnParam = qn || 120; // 默认请求 4K，服务器会按权限降级
+
+  let json = await fetchPlayurl(bvid, cid, qnParam, 16);
+  if (json.code !== 0 || !(json.data && json.data.dash)) {
+    // DASH 缺失/失败：FLV 兜底请求（单流直下，无需 ffmpeg 合并）
+    let flv = null;
+    try {
+      flv = await fetchPlayurl(bvid, cid, qnParam, 1);
+      if (flv.code !== 0) flv = null;
+    } catch (_) { flv = null; }
+    if (flv) json = flv;
+    else if (json.code !== 0) throw new Error(json.message || `code=${json.code}`);
   }
   const d = json.data || {};
   const acceptQn = Array.isArray(d.accept_quality) ? d.accept_quality : [];
@@ -139,7 +150,7 @@ async function getPlayUrl(bvid, cid, qn = 0) {
     127: '8K 超高清',
   };
 
-  // ---- DASH 格式处理（fnval=16 返回 dash 字段） ----
+  // ---- DASH 格式处理（fnval 含 16 位时返回 dash 字段） ----
   const dash = d.dash || null;
   let dashInfo = null;
   if (dash) {
@@ -183,7 +194,14 @@ async function getPlayUrl(bvid, cid, qn = 0) {
     label: qnMap[qn2] || acceptDesc[acceptQn.indexOf(qn2)] || `画质 ${qn2}`,
     description: acceptDesc[acceptQn.indexOf(qn2)] || '',
     url: null,  // 下载时按 qn 动态取
-    size: primary.size || 0,
+    // DASH 画质：用该画质视频流带宽估算字节大小（bandwidth 单位 bps，timelength 单位 ms）
+    // 无 DASH 流时回退到 FLV 单文件大小（primary.size）；彻底无数据则 0
+    // 修复：原逻辑恒取 primary.size，而 fnval=16 时 durl 为空 -> 所有画质 size 永远为 0
+    size: (dashInfo && dashInfo.videos[qn2])
+      ? (d.timelength && dashInfo.videos[qn2].bandwidth
+          ? Math.round((dashInfo.videos[qn2].bandwidth / 8) * (d.timelength / 1000))
+          : 0)
+      : (primary.size || 0),
     current: qn2 === d.quality,
     dash: !!(dashInfo && dashInfo.videos[qn2]), // 标记该画质是否有 DASH 流
   }));
@@ -206,6 +224,15 @@ async function getPlayUrl(bvid, cid, qn = 0) {
   };
 }
 
+// 统一解析 backupUrl：B 站正常返回数组，但上游若改为返回字符串，直接 [0] 会取到首字符（如 "h"）导致下载失败。
+// 数组取首项、字符串直接返回、其它情况返回空串。
+function firstBackup(bu) {
+  if (!bu) return '';
+  if (Array.isArray(bu)) return bu[0] || '';
+  if (typeof bu === 'string') return bu;
+  return '';
+}
+
 // 根据画质代码获取 DASH 下载所需的视频流 + 音频流 URL
 function getDashStreamUrls(dashInfo, qn) {
   if (!dashInfo) return null;
@@ -226,11 +253,11 @@ function getDashStreamUrls(dashInfo, qn) {
   }
   return {
     videoUrl: video.baseUrl || '',
-    videoBackup: (video.backupUrl || video.backup_url || [])[0] || '',
+    videoBackup: firstBackup(video.backupUrl || video.backup_url),
     videoCodec: video.codecs || '',
     videoBandwidth: video.bandwidth || 0,
     audioUrl,
-    audioBackup: dashInfo.bestAudio ? ((dashInfo.bestAudio.backupUrl || dashInfo.bestAudio.backup_url || [])[0] || '') : '',
+    audioBackup: dashInfo.bestAudio ? firstBackup(dashInfo.bestAudio.backupUrl || dashInfo.bestAudio.backup_url) : '',
     audioCodec,
   };
 }
