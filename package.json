@@ -52,6 +52,10 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "assets/bg-videos",
+        "to": "bg-videos"
       }
     ],
     "win": {

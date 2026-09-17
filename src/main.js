@@ -1508,6 +1508,31 @@ ipcMain.handle('bg:scanVideos', async (_e, dir) => {
   }
 });
 
+// ===== 视频背景：内置默认视频目录（随软件打包，其他电脑无需单独下载）=====
+ipcMain.handle('bg:defaultDir', async () => {
+  try {
+    if (app.isPackaged) {
+      return { ok: true, dir: path.join(process.resourcesPath, 'bg-videos') };
+    }
+    return { ok: true, dir: path.join(__dirname, '..', 'assets', 'bg-videos') };
+  } catch (e) {
+    return { ok: false, dir: '', error: e.message };
+  }
+});
+
+// ===== 视频背景：选择背景视频（可多选）=====
+ipcMain.handle('dialog:pickBgVideos', async () => {
+  const r = await dialog.showOpenDialog(mainWindow, {
+    title: '选择背景视频（可多选）',
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: '视频', extensions: ['mp4', 'webm', 'mkv', 'mov', 'm4v', 'avi'] },
+    ],
+  });
+  if (r.canceled || !r.filePaths.length) return null;
+  return r.filePaths;
+});
+
 ipcMain.handle('auth:login', async () => {
   try {
     if (loginWindow && !loginWindow.isDestroyed()) {
@@ -1859,32 +1884,41 @@ ipcMain.handle('dyauth:login', async () => {
 function startDyLoginPoll() {
   stopDyLoginPoll();
   let elapsed = 0;
+  let verifying = false; // 防止重复发起登录态校验
   const interval = 1200;
   const maxWait = 5 * 60 * 1000;
 
   dyLoginPollTimer = setInterval(async () => {
     elapsed += interval;
+    if (verifying) return;
     try {
-      const { header, map } = await getDouyinCookieHeader();
+      // 只读 session 里的实时 cookie（不走 loadDyAuth 兜底）：
+      // 旧版会兜底读上次登录的存档 cookie，导致旧的过期 sessionid 被
+      // 判成"已登录"——窗口一打开就弹"登录成功"，但实际登录态早已失效
+      const cookies = await session.defaultSession.cookies.get({ domain: '.douyin.com' });
+      const map = {};
+      for (const c of cookies) map[c.name] = c.value;
       if (isDyLoggedIn(map)) {
+        verifying = true;
         const nickname = map['nickname'] || '';
-        // 立即保存 cookie 并回执，不等待头像抓取
-        saveDyAuth({ cookie: header, name: nickname, avatar: '', loginAt: Date.now() });
+        // 二次校验：抓一次用户主页，确认登录态真实有效（能取到头像/昵称）
+        const profile = await grabDyProfile().catch(() => ({}));
+        verifying = false;
+        if (!profile || (!profile.nickname && !profile.avatar)) {
+          // cookie 有了但主页确认不是登录态（常见于 cookie 无效/过期）——不报成功，继续等
+          if (elapsed >= maxWait) {
+            stopDyLoginPoll();
+            if (dyLoginWindow && !dyLoginWindow.isDestroyed()) dyLoginWindow.close();
+          }
+          return;
+        }
+        const name = profile.nickname || nickname || '';
+        saveDyAuth({ cookie: cookies.map(c => `${c.name}=${c.value}`).join('; '), name, avatar: profile.avatar || '', loginAt: Date.now() });
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('dyauth:loginSuccess', { nickname });
+          mainWindow.webContents.send('dyauth:loginSuccess', { nickname: name, avatar: profile.avatar || '' });
         }
         if (dyLoginWindow && !dyLoginWindow.isDestroyed()) dyLoginWindow.close();
         stopDyLoginPoll();
-        // 异步抓取主页头像/昵称，抓取完成后补发（不阻塞登录回执）
-        grabDyProfile().then(profile => {
-          try {
-            const name = profile.nickname || nickname || '';
-            saveDyAuth({ cookie: header, name, avatar: profile.avatar || '', loginAt: Date.now() });
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('dyauth:loginSuccess', { nickname: name, avatar: profile.avatar || '' });
-            }
-          } catch (_) {}
-        }).catch(() => {});
       }
     } catch (_) {}
     if (elapsed >= maxWait) {

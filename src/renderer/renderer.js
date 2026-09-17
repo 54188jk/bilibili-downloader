@@ -144,6 +144,12 @@ function goView(view) {
   document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
   target.classList.add('active');
   syncBrand(view);
+  // 平台切换：B站页 ↔ 抖音/消息页 时，左上角登录面板同步更新
+  const plat = platformOfView(view);
+  if (plat && plat !== state.currentPlatform) {
+    state.currentPlatform = plat;
+    refreshAuth();
+  }
   if (view === 'history') loadHistory();
   if (view === 'messages') loadMessages();
   if (view === 'lyric') onEnterLyricView();
@@ -177,22 +183,38 @@ document.querySelectorAll('.switch[data-key]').forEach((el) => {
     localStorage.setItem(SWITCH_KEY, JSON.stringify(obj));
     if (el.dataset.key === 'lyrics' && App.desktopLyricsToggle) App.desktopLyricsToggle();
     if (el.dataset.key === 'videoBg') applyVideoBg(el.classList.contains('on'));
+    if (el.dataset.key === 'videoBgSound') bgApplySound();
   });
 });
 
-/* ---------------- 登录态 ---------------- */
+/* ---------------- 登录态（平台感知） ---------------- */
+// 登录面板跟随侧栏视图切换：B站页 → B站，抖音/消息页 → 抖音，其余视图保持当前平台
+state.currentPlatform = 'bili';
+let dyLoggedIn = false;
+function platformOfView(view) {
+  if (view === 'douyin' || view === 'messages') return 'douyin';
+  if (view === 'bili') return 'bili';
+  return null; // 其他视图不打断当前平台
+}
 async function refreshAuth() {
+  if (state.currentPlatform === 'douyin') return refreshDyAuth();
+  return refreshBiliAuth();
+}
+async function refreshBiliAuth() {
   try {
     const r = await App.authStatus();
-    const ok = r && r.ok && r.loggedIn;
-    state.loggedIn = !!ok;
-    const info = (r && (r.user || r.data)) || {};
+    // 主进程返回 {ok, data:{isLogin, uname, level, face}}；
+    // 旧代码误读 r.loggedIn（不存在），导致登录成功后顶栏永远显示"未登录"，
+    // 也就是"提示登录成功但实际未登录"的真正来源
+    const data = (r && r.data) || {};
+    const ok = !!(r && r.ok && data.isLogin);
+    state.loggedIn = ok;
     if (ok) {
-      $('userName').textContent = info.uname || info.name || '已登录';
-      $('userSub').textContent = (info.level ? 'LV' + info.level + ' · ' : '') + '已登录 B 站';
-      if (info.face || info.avatar) $('userAvatar').src = String(info.face || info.avatar).replace(/^http:/, 'https:');
+      $('userName').textContent = data.uname || data.name || '已登录';
+      $('userSub').textContent = (data.level ? 'LV' + data.level + ' · ' : '') + '已登录 B 站';
+      if (data.face || data.avatar) $('userAvatar').src = String(data.face || data.avatar).replace(/^http:/, 'https:');
       $('logoutBtn').style.display = '';
-      $('statusLogin').textContent = 'Cookie 已登录';
+      $('statusLogin').textContent = '已登录 B 站';
     } else {
       $('userName').textContent = '未登录';
       $('userSub').textContent = '点击登录 B 站解锁高画质';
@@ -201,8 +223,33 @@ async function refreshAuth() {
     }
   } catch (_) { /* 忽略 */ }
 }
+async function refreshDyAuth() {
+  try {
+    const r = await App.dyAuthStatus();
+    const d = (r && r.data) || {};
+    dyLoggedIn = !!(r && r.ok && d.isLogin);
+    if (dyLoggedIn) {
+      $('userName').textContent = d.name || '已登录';
+      $('userSub').textContent = '已登录抖音';
+      if (d.avatar) $('userAvatar').src = String(d.avatar).replace(/^http:/, 'https:');
+      $('logoutBtn').style.display = '';
+      $('statusLogin').textContent = '已登录抖音';
+    } else {
+      $('userName').textContent = '未登录';
+      $('userSub').textContent = '点击登录抖音';
+      $('logoutBtn').style.display = 'none';
+      $('statusLogin').textContent = '未登录';
+    }
+  } catch (_) { /* 忽略 */ }
+}
 $('userBox').addEventListener('click', async (e) => {
   if (e.target.closest('#logoutBtn')) return;
+  if (state.currentPlatform === 'douyin') {
+    if (dyLoggedIn) return;
+    App.dyLogin();
+    toast('已打开登录窗口，请用抖音 App 扫码');
+    return;
+  }
   if (state.loggedIn) return;
   showLoading('等待扫码登录…');
   const r = await App.login();
@@ -211,8 +258,13 @@ $('userBox').addEventListener('click', async (e) => {
   else toast('登录失败：' + ((r && r.error) || '未知错误'), 'error');
 });
 $('logoutBtn').addEventListener('click', async () => {
-  await App.logout();
-  toast('已退出登录');
+  if (state.currentPlatform === 'douyin') {
+    await App.dyLogout();
+    toast('已退出抖音登录');
+  } else {
+    await App.logout();
+    toast('已退出登录');
+  }
   refreshAuth();
 });
 $('openBiliBtn').addEventListener('click', () => App.openExternal('https://www.bilibili.com'));
@@ -358,7 +410,7 @@ function renderBiliResults() {
     row.className = 'task-item pick';
     row.dataset.idx = String(idx);
     const kindText = it.kind === 'image' ? '图片动态 ' + (it.count || 0) + ' 张'
-      : it.kind === 'douyin' ? '抖音' : it.kind === 'kuaishou' ? '快手' : '视频';
+      : it.kind === 'douyin' ? '抖音' : it.kind === 'kuaishou' ? '快手' : 'B 站';
     row.innerHTML = `
       <div class="task-ic dl"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M4.5 8 7 10.5 9.5 8M7 10.5v-7"/></svg></div>
       <div class="task-main">
@@ -1435,6 +1487,7 @@ async function loadHistory() {
     return;
   }
   let total = 0;
+  const KIND_TEXT = { video: 'B 站', image: 'B 站动态', douyin: '抖音', kuaishou: '快手', movie: '影视', music: '音乐' };
   arr.slice().reverse().forEach((it) => {
     total += Number(it.size) || 0;
     const row = document.createElement('div');
@@ -1444,7 +1497,7 @@ async function loadHistory() {
       <div class="hist-thumb"></div>
       <div class="hist-main">
         <div class="hist-name">${escapeHtml(it.title || it.filename || '未命名')}</div>
-        <div class="hist-sub">${escapeHtml(it.kind || '')}${it.time ? ' · ' + escapeHtml(new Date(it.time).toLocaleString()) : ''}</div>
+        <div class="hist-sub">${escapeHtml(KIND_TEXT[it.kind] || it.kind || '')}${it.time ? ' · ' + escapeHtml(new Date(it.time).toLocaleString()) : ''}</div>
       </div>
       <span class="hist-size">${formatSize(it.size)}</span>
       ${full ? '<button class="hist-folder" title="在文件夹中显示"><svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M1.5 4c0-.8.7-1.5 1.5-1.5h2.2l1.3 1.5H11c.8 0 1.5.7 1.5 1.5v5c0 .8-.7 1.5-1.5 1.5H3c-.8 0-1.5-.7-1.5-1.5V4Z"/></svg></button>' : ''}`;
@@ -1825,10 +1878,11 @@ imEl('imInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendImMessage(); }
 });
 
-// 登录成功后自动刷新消息页
+// 登录成功后刷新登录面板 + 消息页
 if (App.onDyLoginSuccess) {
   App.onDyLoginSuccess(() => {
     toast('抖音登录成功');
+    refreshAuth();
     if (document.getElementById('view-messages') && document.getElementById('view-messages').classList.contains('active')) {
       loadMessages();
     }
@@ -1836,17 +1890,53 @@ if (App.onDyLoginSuccess) {
 }
 
 /* ============================================================
- * 视频背景：内容区轮播本地视频（设置 → 外观 → 视频背景）
- * - 默认目录可经 localStorage(biligrab.bgdir) 覆盖
+ * 视频背景：内容区轮播视频（设置 → 外观 → 视频背景）
+ * - 视频来源优先级：自选视频列表 > 自选目录 > 软件内置（随安装包打包，其他电脑开箱即用）
+ * - 背景声音可在设置中开关（默认静音）
  * - 播完自动轮播下一个，加载失败自动跳过
  * ============================================================ */
 const BG_DIR_KEY = 'biligrab.bgdir';
-const BG_DEFAULT_DIR = 'C:\\Users\\Administrator\\Desktop\\10_15_视频\\视频';
+const BG_FILES_KEY = 'biligrab.bgFiles';
 let bgVideos = [];
 let bgIndex = 0;
+let bgLoaded = false;
 
 function bgFileUrl(p) {
   return 'file:///' + String(p).replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/');
+}
+
+async function bgResolveVideos() {
+  // 1) 自选视频文件（设置 → 背景视频 → 选择视频）
+  try {
+    const raw = localStorage.getItem(BG_FILES_KEY);
+    if (raw) {
+      const arr = JSON.parse(raw);
+      if (Array.isArray(arr) && arr.length) return arr;
+    }
+  } catch (_) {}
+  // 2) 自选目录（兼容旧版目录配置）
+  const dir = localStorage.getItem(BG_DIR_KEY);
+  if (dir) {
+    try {
+      const r = App.bgScanVideos ? await App.bgScanVideos(dir) : null;
+      if (r && r.ok && r.videos && r.videos.length) return r.videos;
+    } catch (_) {}
+  }
+  // 3) 软件内置视频（打包在安装目录 resources/bg-videos，任何电脑都可用）
+  try {
+    const d = App.bgDefaultDir ? await App.bgDefaultDir() : null;
+    if (d && d.ok && d.dir) {
+      const r = App.bgScanVideos ? await App.bgScanVideos(d.dir) : null;
+      if (r && r.ok && r.videos && r.videos.length) return r.videos;
+    }
+  } catch (_) {}
+  return [];
+}
+
+function bgApplySound() {
+  const video = $('bgVideo');
+  if (!video) return;
+  video.muted = !switchOn('videoBgSound');
 }
 
 function bgPlayCurrent() {
@@ -1854,6 +1944,7 @@ function bgPlayCurrent() {
   if (!video || !bgVideos.length) return;
   bgIndex = ((bgIndex % bgVideos.length) + bgVideos.length) % bgVideos.length;
   video.src = bgFileUrl(bgVideos[bgIndex]);
+  bgApplySound();
   const p = video.play();
   if (p && p.catch) p.catch(() => {});
 }
@@ -1861,18 +1952,25 @@ function bgPlayCurrent() {
 async function bgStart() {
   const video = $('bgVideo');
   if (!video) return;
-  if (!bgVideos.length) {
-    const dir = localStorage.getItem(BG_DIR_KEY) || BG_DEFAULT_DIR;
-    try {
-      const r = App.bgScanVideos ? await App.bgScanVideos(dir) : null;
-      bgVideos = (r && r.ok && r.videos) || [];
-    } catch (_) { bgVideos = []; }
-    if (!bgVideos.length) return;
+  if (!bgLoaded) {
+    bgVideos = await bgResolveVideos();
+    if (!bgVideos.length) {
+      toast('未找到背景视频，可在 设置 → 外观 → 背景视频 里选择', 'warn');
+      return;
+    }
+    bgLoaded = true;
     bgIndex = 0;
     video.addEventListener('ended', () => { bgIndex = (bgIndex + 1) % bgVideos.length; bgPlayCurrent(); });
     video.addEventListener('error', () => { if (bgVideos.length > 1) { bgIndex = (bgIndex + 1) % bgVideos.length; bgPlayCurrent(); } });
   }
+  if (!bgVideos.length) return;
   bgPlayCurrent();
+}
+
+function bgReset() {
+  bgVideos = [];
+  bgLoaded = false;
+  bgIndex = 0;
 }
 
 function applyVideoBg(on) {
@@ -1890,3 +1988,47 @@ function applyVideoBg(on) {
 
 // 启动时按开关状态初始化
 applyVideoBg(switchOn('videoBg'));
+
+/* ---------------- 背景预览 / 选择视频 ---------------- */
+$('bgPreviewBtn').addEventListener('click', async () => {
+  if (!bgLoaded) {
+    bgVideos = await bgResolveVideos();
+    bgLoaded = bgVideos.length > 0;
+  }
+  if (!bgVideos.length) { toast('未找到背景视频，请先点击「选择视频」', 'warn'); return; }
+  const idx = bgIndex % bgVideos.length;
+  const src = bgVideos[idx];
+  const player = $('bgpPlayer');
+  player.src = bgFileUrl(src);
+  player.muted = false; // 预览始终带声音，方便确认
+  let name = '未知';
+  try { name = decodeURIComponent(src.split(/[\\/]/).pop()); } catch (_) { name = src.split(/[\\/]/).pop(); }
+  $('bgpSub').textContent = `第 ${idx + 1}/${bgVideos.length} 个 · ${name.slice(0, 60)}`;
+  $('bgPreviewMask').classList.remove('hidden');
+  const p = player.play();
+  if (p && p.catch) p.catch(() => {});
+});
+function closeBgPreview() {
+  const player = $('bgpPlayer');
+  try { player.pause(); } catch (_) {}
+  player.removeAttribute('src');
+  try { player.load(); } catch (_) {}
+  $('bgPreviewMask').classList.add('hidden');
+}
+$('bgpClose').addEventListener('click', closeBgPreview);
+$('bgPreviewMask').addEventListener('click', (e) => {
+  if (e.target === $('bgPreviewMask')) closeBgPreview();
+});
+
+$('bgPickBtn').addEventListener('click', async () => {
+  const files = await App.pickBgVideos();
+  if (!files || !files.length) return;
+  localStorage.setItem(BG_FILES_KEY, JSON.stringify(files));
+  bgReset();
+  toast('已选择 ' + files.length + ' 个背景视频');
+  if (switchOn('videoBg')) {
+    const v = $('bgVideo');
+    if (v) { try { v.pause(); } catch (_) {} v.removeAttribute('src'); try { v.load(); } catch (_) {} }
+    bgStart();
+  }
+});

@@ -400,6 +400,14 @@ body.dark .song-row.playing{border-color:rgba(10,132,255,.4)}
 .hist-folder:hover{color:var(--accent);border-color:rgba(0,122,255,.3);background:var(--selected-bg)}
 body.dark .hist-folder:hover{border-color:rgba(10,132,255,.45)}
 
+/* 背景视频预览弹窗 */
+.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.35);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal-mask.hidden{display:none}
+.bg-preview{width:min(720px,86vw);background:var(--content-bg);border:1px solid var(--separator);border-radius:var(--r-l);box-shadow:0 18px 60px rgba(0,0,0,.22);overflow:hidden}
+.bgp-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;font-size:13px;font-weight:600;color:var(--ink-1);border-bottom:1px solid var(--separator)}
+.bg-preview video{display:block;width:100%;max-height:56vh;background:#000;object-fit:contain}
+.bgp-foot{padding:10px 16px;font-size:11px;color:var(--ink-3);border-top:1px solid var(--separator)}
+
 /* ===== 播放器控件按钮（视图内本地播放器） ===== */
 .p-btn svg{width:14px;height:14px}
 
