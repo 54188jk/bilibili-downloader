@@ -307,11 +307,14 @@ async function searchVideoByKeyword(keyword, cookie = '') {
     }
     return out;
   }
-  if (status === 6 || status === 6001) {
-    // 未登录 / csrf 校验失败
-    return { needLogin: true, list: [] };
+  if (status === 6 || status === 6001 || status === 2483) {
+    // 未登录 / csrf 校验失败 / 请先登录再搜索
+    return { needLogin: true, list: [], error: json.status_msg || '请先登录后再搜索' };
   }
-  return { needLogin: false, list: [] };
+  if (status !== 0) {
+    // 其他错误（风控/签名失效等）明确透传，不再静默返回空列表
+    return { needLogin: false, list: [], error: json.status_msg || ('搜索失败 code ' + status) };
+  }
 }
 
 // 通过 aweme_id 直接解析无水印视频（复用现有逻辑）

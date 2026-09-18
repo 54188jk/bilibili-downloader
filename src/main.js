@@ -1533,6 +1533,115 @@ ipcMain.handle('dialog:pickBgVideos', async () => {
   return r.filePaths;
 });
 
+// ===== 视频背景：抖音音乐视频下载入本地缓存，作为背景轮播来源 =====
+function bgCacheDir() {
+  return path.join(app.getPath('userData'), 'bg-cache');
+}
+ipcMain.handle('bg:cacheDir', async () => {
+  try { return { ok: true, dir: bgCacheDir() }; } catch (e) { return { ok: false, dir: '', error: e.message }; }
+});
+
+// 内置背景自动联网扩充：B站搜索"琵琶曲"（免登录、免付费、CDN 快），
+// 下载 360P 低清流 + 音频流并用 ffmpeg 合并入背景缓存。
+// 3 路并发提速；全程静默（不弹任何通知），失败只在结果里计数。
+let bgFetchInFlight = false;
+ipcMain.handle('bg:fetchPipaOnline', async () => {
+  if (bgFetchInFlight) return { ok: true, added: 0, skipped: 0, failed: 0, inflight: true };
+  bgFetchInFlight = true;
+  try {
+    // 1) B站搜索（免登录）
+    let items = [];
+    try {
+      const r = await bili.searchVideo('琵琶曲');
+      items = (r || []).filter((x) => x && x.type === 'video' && x.bvid);
+    } catch (_) {}
+    if (!items.length) return { ok: false, error: 'B站未搜到琵琶曲相关视频，请稍后重试' };
+
+    // 2) 时长 30s~6min 适合做背景（太短循环频繁、太长下载慢），按播放量优先
+    const durSec = (x) => {
+      const parts = String(x.duration || '').split(':').map(Number);
+      if (parts.some(isNaN)) return 0;
+      if (parts.length === 2) return parts[0] * 60 + parts[1];
+      if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+      return 0;
+    };
+    let cands = items.filter((x) => { const d = durSec(x); return !d || (d >= 30 && d <= 360); });
+    if (cands.length < 6) cands = cands.concat(items);
+    const seen = new Set();
+    cands = cands.filter((x) => (seen.has(x.bvid) ? false : (seen.add(x.bvid), true)));
+    cands = cands.slice(0, 6);
+
+    // 3) 3 路并发：取直链 → 下载视频/音频流 → ffmpeg 合并入背景缓存（已存在跳过）
+    const cacheDir = bgCacheDir();
+    const ffmpeg = getFfmpegPath();
+    const stat = { added: 0, skipped: 0, failed: 0 };
+    let ptr = 0;
+    const worker = async () => {
+      while (ptr < cands.length) {
+        const it = cands[ptr++];
+        try {
+          const bvid = it.bvid;
+          const suffix = '_' + String(bvid).slice(-6) + '.mp4';
+          if (fs.existsSync(cacheDir)) {
+            const hit = fs.readdirSync(cacheDir).find((f) => f.endsWith(suffix));
+            if (hit) { stat.skipped++; continue; }
+          }
+          let cid = Number(it.cid) || 0;
+          let title = it.title || '';
+          if (!cid) {
+            const info = await bili.parseVideo(bvid);
+            if (!info || !info.cid) { stat.failed++; continue; }
+            cid = info.cid;
+            title = title || info.title || '';
+          }
+          // qn=16（360P）：体积小、下载合并都快，背景播放足够清晰
+          const play = await bili.getPlayUrl(bvid, cid, 16);
+          const streams = (play && play.dash) ? bili.getDashStreamUrls(play.dash, 16) : null;
+          const safe = String(title)
+            .replace(/<[^>]+>/g, '')            // 去掉搜索结果里的 <em> 高亮标记
+            .replace(/[\\/:*?"<>|\r\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 50) || '琵琶曲';
+          const filename = `${safe}_${String(bvid).slice(-6)}.mp4`;
+          const outPath = path.join(cacheDir, filename);
+          if (fs.existsSync(outPath)) { stat.skipped++; continue; }
+          const referer = `https://www.bilibili.com/video/${bvid}`;
+          if (!streams || !streams.videoUrl) {
+            // 无 DASH：用单流直下（durl）
+            const single = (play && (play.playUrl || (play.segments && play.segments[0] && play.segments[0].url))) || '';
+            if (!single) { stat.failed++; continue; }
+            await downloadWithProgress(single, filename, cacheDir, referer, () => {});
+            stat.added++;
+            continue;
+          }
+          const tag = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+          const tmpVideo = path.join(cacheDir, `_tmp_v_${tag}.m4s`);
+          const tmpAudio = path.join(cacheDir, `_tmp_a_${tag}.m4s`);
+          await downloadWithProgress(streams.videoBackup || streams.videoUrl, path.basename(tmpVideo), cacheDir, referer, () => {});
+          await downloadWithProgress(streams.audioBackup || streams.audioUrl, path.basename(tmpAudio), cacheDir, referer, () => {});
+          if (ffmpeg) {
+            await runFfmpeg(ffmpeg, ['-y', '-i', tmpVideo, '-i', tmpAudio, '-c', 'copy', outPath], null, filename);
+          } else {
+            // 无 ffmpeg：直接用视频流（无声但能播）
+            fs.renameSync(tmpVideo, outPath);
+          }
+          try { fs.unlinkSync(tmpVideo); } catch (_) {}
+          try { fs.unlinkSync(tmpAudio); } catch (_) {}
+          stat.added++;
+        } catch (_) { stat.failed++; }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    if (!stat.added && !stat.skipped) return { ok: false, error: '下载琵琶曲视频失败，请稍后重试' };
+    return { ok: true, added: stat.added, skipped: stat.skipped, failed: stat.failed };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  } finally {
+    bgFetchInFlight = false;
+  }
+});
+
 ipcMain.handle('auth:login', async () => {
   try {
     if (loginWindow && !loginWindow.isDestroyed()) {
@@ -1817,36 +1926,50 @@ function getDyNickname(map) {
   return map['nickname'] || '';
 }
 
+// 抖音登录态验证缓存：cookie 存在不等于登录有效（sessionid 可能早已服务端过期），
+// 必须用隐藏窗口探一次用户主页才能确认。正/负结果分别缓存，避免频繁开窗验证。
+let dyVerify = { at: 0, ok: false, name: '', avatar: '' };
+const DY_VERIFY_TTL_OK = 5 * 60 * 1000;   // 验证通过：5 分钟内直接采信
+const DY_VERIFY_TTL_BAD = 60 * 1000;      // 验证失败：1 分钟内不再重复开窗（可能只是网络慢）
+
+async function verifyDyLogin(force = false) {
+  const { map } = await getDouyinCookieHeader();
+  if (!isDyLoggedIn(map)) {
+    dyVerify = { at: Date.now(), ok: false, name: '', avatar: '' };
+    return { ok: false };
+  }
+  const ttl = dyVerify.ok ? DY_VERIFY_TTL_OK : DY_VERIFY_TTL_BAD;
+  if (!force && dyVerify.at && Date.now() - dyVerify.at < ttl) {
+    return { ok: dyVerify.ok, name: dyVerify.name, avatar: dyVerify.avatar };
+  }
+  const profile = await grabDyProfile().catch(() => ({}));
+  const ok = !!(profile && (profile.nickname || profile.avatar));
+  dyVerify = {
+    at: Date.now(),
+    ok,
+    name: ok ? (profile.nickname || '') : '',
+    avatar: ok ? (profile.avatar || '') : '',
+  };
+  return ok ? { ok: true, name: dyVerify.name, avatar: dyVerify.avatar } : { ok: false };
+}
+
 ipcMain.handle('dyauth:status', async () => {
   try {
     const saved = loadDyAuth();
     if (saved && saved.cookie) injectDyCookieToSession(saved.cookie);
-    const { header, map } = await getDouyinCookieHeader();
-    const isLogin = isDyLoggedIn(map);
-    if (isLogin) {
-      let avatar = saved && saved.avatar ? saved.avatar : '';
-      let name = saved && saved.name ? saved.name : (getDyNickname(map) || '已登录抖音');
-      // 若已登录但没抓到头像/昵称，异步补抓一次（不阻塞返回）
-      if (!avatar || !name || name === '已登录抖音') {
-        grabDyProfile().then(profile => {
-          try {
-            const na = profile.nickname || name || '';
-            const av = profile.avatar || avatar || '';
-            if ((na !== name || av !== avatar) && (na || av)) {
-              saveDyAuth({ cookie: header, name: na, avatar: av, loginAt: Date.now() });
-              if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send('dyauth:loginSuccess', { nickname: na, avatar: av });
-              }
-            }
-          } catch (_) {}
-        }).catch(() => {});
+    // 旧版直接用 isDyLoggedIn(map) 判定 —— 过期的存量 cookie 会被当成"已登录"，
+    // 还会顺带发出 loginSuccess 事件弹出"抖音登录成功"提示（未登录却提示已登录的来源）。
+    // 现在必须通过主页验证；验证通过的资料更新只静默写回存档，不发登录成功事件。
+    const v = await verifyDyLogin();
+    if (v.ok) {
+      let avatar = (saved && saved.avatar) || v.avatar || '';
+      let name = (saved && saved.name) || v.name || '已登录抖音';
+      if (!saved || !saved.avatar || !saved.name) {
+        try { saveDyAuth({ cookie: (await getDouyinCookieHeader()).header, name, avatar, loginAt: Date.now() }); } catch (_) {}
       }
-      return {
-        ok: true,
-        data: { isLogin: true, name, avatar },
-      };
+      return { ok: true, data: { isLogin: true, name, avatar } };
     }
-    return { ok: true, data: { isLogin } };
+    return { ok: true, data: { isLogin: false } };
   } catch (e) {
     return { ok: true, data: { isLogin: false, error: e.message } };
   }
@@ -1867,6 +1990,36 @@ ipcMain.handle('dyauth:login', async () => {
     });
     dyLoginWindow = win;
     win.setMenuBarVisibility(false);
+    // 自动打开登录面板并切到扫码 tab —— 否则用户面对的是抖音首页，
+    // 二维码不会自己出现（"获取不到扫码"的来源）
+    win.webContents.once('did-finish-load', () => {
+      setTimeout(async () => {
+        try {
+          const r = await win.webContents.executeJavaScript(`(async () => {
+            const sleep = (ms) => new Promise((r2) => setTimeout(r2, ms));
+            const visible = (el) => el && (el.offsetParent !== null || el.getClientRects().length > 0);
+            // 1) 点击「登录」按钮打开登录面板
+            const btn = Array.from(document.querySelectorAll('button, [role="button"]'))
+              .find((el) => (el.textContent || '').trim() === '登录' && visible(el));
+            if (!btn) return 'no-button';
+            btn.click();
+            await sleep(1200);
+            // 2) 面板内若有「扫码登录 / 扫一扫」tab，切过去显示二维码
+            for (let i = 0; i < 4; i++) {
+              const tab = Array.from(document.querySelectorAll('[role="tab"], button, [class*="tab"], span'))
+                .find((el) => {
+                  const t = (el.textContent || '').trim();
+                  return /扫码登录|扫一扫/.test(t) && t.length < 10 && visible(el);
+                });
+              if (tab) { tab.click(); return 'qr-tab'; }
+              await sleep(900);
+            }
+            return 'panel';
+          })()`);
+          console.log('[dylogin] 自动打开登录面板:', r);
+        } catch (_) {}
+      }, 1500);
+    });
     await win.loadURL('https://www.douyin.com/');
     startDyLoginPoll();
     return new Promise(resolve => {
@@ -1905,7 +2058,10 @@ function startDyLoginPoll() {
         const profile = await grabDyProfile().catch(() => ({}));
         verifying = false;
         if (!profile || (!profile.nickname && !profile.avatar)) {
-          // cookie 有了但主页确认不是登录态（常见于 cookie 无效/过期）——不报成功，继续等
+          // cookie 有了但主页确认不是登录态（常见于 cookie 无效/过期）——不报成功
+          verifying = false;
+          // 歇 8 秒再试，避免每个轮询周期都狂开验证窗口
+          await new Promise(r => setTimeout(r, 8000));
           if (elapsed >= maxWait) {
             stopDyLoginPoll();
             if (dyLoginWindow && !dyLoginWindow.isDestroyed()) dyLoginWindow.close();
@@ -1914,6 +2070,8 @@ function startDyLoginPoll() {
         }
         const name = profile.nickname || nickname || '';
         saveDyAuth({ cookie: cookies.map(c => `${c.name}=${c.value}`).join('; '), name, avatar: profile.avatar || '', loginAt: Date.now() });
+        // 主页验证已通过，预热缓存避免 status 再次开窗验证
+        dyVerify = { at: Date.now(), ok: true, name, avatar: profile.avatar || '' };
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('dyauth:loginSuccess', { nickname: name, avatar: profile.avatar || '' });
         }
@@ -1935,6 +2093,7 @@ function stopDyLoginPoll() {
 ipcMain.handle('dyauth:logout', async () => {
   try {
     clearDyAuth();
+    dyVerify = { at: 0, ok: false, name: '', avatar: '' };
     const cookies = await session.defaultSession.cookies.get({ domain: '.douyin.com' });
     for (const c of cookies) {
       await session.defaultSession.cookies.remove('https://www.douyin.com', c.name);

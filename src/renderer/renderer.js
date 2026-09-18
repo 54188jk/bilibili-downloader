@@ -182,7 +182,11 @@ document.querySelectorAll('.switch[data-key]').forEach((el) => {
     obj[el.dataset.key] = el.classList.contains('on');
     localStorage.setItem(SWITCH_KEY, JSON.stringify(obj));
     if (el.dataset.key === 'lyrics' && App.desktopLyricsToggle) App.desktopLyricsToggle();
-    if (el.dataset.key === 'videoBg') applyVideoBg(el.classList.contains('on'));
+    if (el.dataset.key === 'videoBg') {
+      applyVideoBg(el.classList.contains('on'));
+      // 开启视频背景（内置视频）时：自动静默联网获取琵琶曲，无任何弹窗
+      if (el.classList.contains('on')) silentFetchPipa();
+    }
     if (el.dataset.key === 'videoBgSound') bgApplySound();
   });
 });
@@ -224,6 +228,8 @@ async function refreshBiliAuth() {
   } catch (_) { /* 忽略 */ }
 }
 async function refreshDyAuth() {
+  // 验证可能需要数秒（隐藏窗口探主页），先立即显示抖音文案，再用真实结果覆盖
+  $('userSub').textContent = '正在检查抖音登录…';
   try {
     const r = await App.dyAuthStatus();
     const d = (r && r.data) || {};
@@ -1891,9 +1897,9 @@ if (App.onDyLoginSuccess) {
 
 /* ============================================================
  * 视频背景：内容区轮播视频（设置 → 外观 → 视频背景）
- * - 视频来源优先级：自选视频列表 > 自选目录 > 软件内置（随安装包打包，其他电脑开箱即用）
+ * - 来源：抖音搜索添加的音乐视频（始终参与轮播）+ 自选本地视频 / 软件内置
  * - 背景声音可在设置中开关（默认静音）
- * - 播完自动轮播下一个，加载失败自动跳过
+ * - 预览弹窗打开时背景暂停，关闭后背景恢复播放
  * ============================================================ */
 const BG_DIR_KEY = 'biligrab.bgdir';
 const BG_FILES_KEY = 'biligrab.bgFiles';
@@ -1905,32 +1911,40 @@ function bgFileUrl(p) {
   return 'file:///' + String(p).replace(/\\/g, '/').split('/').map(encodeURIComponent).join('/');
 }
 
+async function bgScanDirSafe(dir) {
+  if (!dir) return [];
+  try {
+    const r = App.bgScanVideos ? await App.bgScanVideos(dir) : null;
+    if (r && r.ok && r.videos && r.videos.length) return r.videos;
+  } catch (_) {}
+  return [];
+}
+
 async function bgResolveVideos() {
-  // 1) 自选视频文件（设置 → 背景视频 → 选择视频）
+  const out = [];
+  // 1) 抖音搜索添加的音乐视频（用户主动加入，始终参与轮播）
+  try {
+    const d = App.bgCacheDir ? await App.bgCacheDir() : null;
+    if (d && d.ok && d.dir) out.push(...(await bgScanDirSafe(d.dir)));
+  } catch (_) {}
+  // 2) 基础来源：自选视频文件 > 自选目录（旧版兼容）> 软件内置
+  let base = [];
   try {
     const raw = localStorage.getItem(BG_FILES_KEY);
     if (raw) {
       const arr = JSON.parse(raw);
-      if (Array.isArray(arr) && arr.length) return arr;
+      if (Array.isArray(arr) && arr.length) base = arr;
     }
   } catch (_) {}
-  // 2) 自选目录（兼容旧版目录配置）
-  const dir = localStorage.getItem(BG_DIR_KEY);
-  if (dir) {
+  if (!base.length) base = await bgScanDirSafe(localStorage.getItem(BG_DIR_KEY));
+  if (!base.length) {
     try {
-      const r = App.bgScanVideos ? await App.bgScanVideos(dir) : null;
-      if (r && r.ok && r.videos && r.videos.length) return r.videos;
+      const d = App.bgDefaultDir ? await App.bgDefaultDir() : null;
+      if (d && d.ok && d.dir) base = await bgScanDirSafe(d.dir);
     } catch (_) {}
   }
-  // 3) 软件内置视频（打包在安装目录 resources/bg-videos，任何电脑都可用）
-  try {
-    const d = App.bgDefaultDir ? await App.bgDefaultDir() : null;
-    if (d && d.ok && d.dir) {
-      const r = App.bgScanVideos ? await App.bgScanVideos(d.dir) : null;
-      if (r && r.ok && r.videos && r.videos.length) return r.videos;
-    }
-  } catch (_) {}
-  return [];
+  for (const p of base) if (!out.includes(p)) out.push(p);
+  return out;
 }
 
 function bgApplySound() {
@@ -1955,7 +1969,7 @@ async function bgStart() {
   if (!bgLoaded) {
     bgVideos = await bgResolveVideos();
     if (!bgVideos.length) {
-      toast('未找到背景视频，可在 设置 → 外观 → 背景视频 里选择', 'warn');
+      toast('未找到背景视频，可在 设置 → 外观 → 背景来源 里选择本地音乐，或点击「内置视频」联网获取琵琶曲', 'warn');
       return;
     }
     bgLoaded = true;
@@ -1971,6 +1985,14 @@ function bgReset() {
   bgVideos = [];
   bgLoaded = false;
   bgIndex = 0;
+}
+
+// 重新加载并立即续播（选择来源后调用）
+async function bgReloadAndPlay() {
+  const v = $('bgVideo');
+  if (v) { try { v.pause(); } catch (_) {} v.removeAttribute('src'); try { v.load(); } catch (_) {} }
+  bgReset();
+  if (switchOn('videoBg')) await bgStart();
 }
 
 function applyVideoBg(on) {
@@ -1989,46 +2011,49 @@ function applyVideoBg(on) {
 // 启动时按开关状态初始化
 applyVideoBg(switchOn('videoBg'));
 
-/* ---------------- 背景预览 / 选择视频 ---------------- */
-$('bgPreviewBtn').addEventListener('click', async () => {
-  if (!bgLoaded) {
-    bgVideos = await bgResolveVideos();
-    bgLoaded = bgVideos.length > 0;
+// 静默合并：联网新获取的视频无感并入当前轮播（不打断正在播放的画面）
+async function bgMergeVideos() {
+  if (!bgLoaded) return;
+  const cur = bgVideos[bgIndex];
+  const next = await bgResolveVideos();
+  for (const p of next) if (!bgVideos.includes(p)) bgVideos.push(p);
+  if (cur) {
+    const i = bgVideos.indexOf(cur);
+    if (i >= 0) bgIndex = i;
   }
-  if (!bgVideos.length) { toast('未找到背景视频，请先点击「选择视频」', 'warn'); return; }
-  const idx = bgIndex % bgVideos.length;
-  const src = bgVideos[idx];
-  const player = $('bgpPlayer');
-  player.src = bgFileUrl(src);
-  player.muted = false; // 预览始终带声音，方便确认
-  let name = '未知';
-  try { name = decodeURIComponent(src.split(/[\\/]/).pop()); } catch (_) { name = src.split(/[\\/]/).pop(); }
-  $('bgpSub').textContent = `第 ${idx + 1}/${bgVideos.length} 个 · ${name.slice(0, 60)}`;
-  $('bgPreviewMask').classList.remove('hidden');
-  const p = player.play();
-  if (p && p.catch) p.catch(() => {});
-});
-function closeBgPreview() {
-  const player = $('bgpPlayer');
-  try { player.pause(); } catch (_) {}
-  player.removeAttribute('src');
-  try { player.load(); } catch (_) {}
-  $('bgPreviewMask').classList.add('hidden');
 }
-$('bgpClose').addEventListener('click', closeBgPreview);
-$('bgPreviewMask').addEventListener('click', (e) => {
-  if (e.target === $('bgPreviewMask')) closeBgPreview();
-});
 
+// 静默获取琵琶曲：无任何弹窗；有新视频就无感并入轮播
+let bgFetching = false;
+async function silentFetchPipa() {
+  if (bgFetching || !App.bgFetchPipaOnline) return;
+  bgFetching = true;
+  try {
+    const r = await App.bgFetchPipaOnline();
+    if (r && r.ok && r.added > 0) await bgMergeVideos();
+  } catch (_) {}
+  bgFetching = false;
+}
+
+/* ---------------- 背景来源：本地音乐 / 内置视频（自动联网获取琵琶曲） ---------------- */
 $('bgPickBtn').addEventListener('click', async () => {
   const files = await App.pickBgVideos();
   if (!files || !files.length) return;
   localStorage.setItem(BG_FILES_KEY, JSON.stringify(files));
-  bgReset();
-  toast('已选择 ' + files.length + ' 个背景视频');
-  if (switchOn('videoBg')) {
-    const v = $('bgVideo');
-    if (v) { try { v.pause(); } catch (_) {} v.removeAttribute('src'); try { v.load(); } catch (_) {} }
-    bgStart();
-  }
+  toast('已选择 ' + files.length + ' 个本地音乐视频');
+  await bgReloadAndPlay();
+});
+$('bgBuiltinBtn').addEventListener('click', async () => {
+  localStorage.removeItem(BG_FILES_KEY);
+  localStorage.removeItem(BG_DIR_KEY);
+  const btn = $('bgBuiltinBtn');
+  btn.disabled = true;
+  btn.textContent = '获取中…';
+  try {
+    const r = await App.bgFetchPipaOnline();
+    if (r && r.ok && r.added > 0) await bgMergeVideos();
+  } catch (_) {}
+  btn.disabled = false;
+  btn.textContent = '内置视频';
+  await bgReloadAndPlay();
 });

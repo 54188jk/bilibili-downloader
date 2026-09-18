@@ -108,6 +108,8 @@ contextBridge.exposeInMainWorld('api', {
   bgScanVideos: (dir) => ipcRenderer.invoke('bg:scanVideos', dir),
   bgDefaultDir: () => ipcRenderer.invoke('bg:defaultDir'),
   pickBgVideos: () => ipcRenderer.invoke('dialog:pickBgVideos'),
+  bgCacheDir: () => ipcRenderer.invoke('bg:cacheDir'),
+  bgFetchPipaOnline: () => ipcRenderer.invoke('bg:fetchPipaOnline'),
 
   // ===== B 站登录 =====
   login: () => ipcRenderer.invoke('auth:login'),
