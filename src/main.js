@@ -1110,7 +1110,7 @@ ipcMain.handle('video:downloadDash', async (evt, { videoUrl, audioUrl, videoBack
       // 合并音视频
       const ffmpeg = getFfmpegPath();
       if (ffmpeg) {
-        const args = ['-y', '-i', tmpVideo, '-i', tmpAudio, '-c', 'copy', outPath];
+        const args = ['-y', '-i', tmpVideo, '-i', tmpAudio, '-c', 'copy', '-movflags', '+faststart', outPath];
         const r = await runFfmpeg(ffmpeg, args, null, filename);
         if (r.ok) {
           try { evt.sender.send('download:progress', { taskId, filename, progress: 100 }); } catch (_) {}
@@ -1543,21 +1543,36 @@ ipcMain.handle('bg:cacheDir', async () => {
 
 // 内置背景自动联网扩充：B站搜索"琵琶曲"（免登录、免付费、CDN 快），
 // 下载 360P 低清流 + 音频流并用 ffmpeg 合并入背景缓存。
-// 3 路并发提速；全程静默（不弹任何通知），失败只在结果里计数。
+// 目标 50 个、保底 40 个；4 路并发提速；全程静默（不弹任何通知）。
 let bgFetchInFlight = false;
 ipcMain.handle('bg:fetchPipaOnline', async () => {
   if (bgFetchInFlight) return { ok: true, added: 0, skipped: 0, failed: 0, inflight: true };
   bgFetchInFlight = true;
+  const TARGET = 50, MIN = 40;
+  const stat = { added: 0, skipped: 0, failed: 0 };
   try {
-    // 1) B站搜索（免登录）
-    let items = [];
-    try {
-      const r = await bili.searchVideo('琵琶曲');
-      items = (r || []).filter((x) => x && x.type === 'video' && x.bvid);
-    } catch (_) {}
-    if (!items.length) return { ok: false, error: 'B站未搜到琵琶曲相关视频，请稍后重试' };
+    const cacheDir = bgCacheDir();
+    const ffmpeg = getFfmpegPath();
+    const seen = new Set();
+    const tried = new Set();
+    let pool = [];
 
-    // 2) 时长 30s~6min 适合做背景（太短循环频繁、太长下载慢），按播放量优先
+    const collectPages = async (pages) => {
+      for (const pg of pages) {
+        if (stat.added + stat.skipped >= TARGET) return;
+        try {
+          const r = await bili.searchVideo('琵琶曲', pg);
+          for (const x of (r || [])) {
+            if (x && x.type === 'video' && x.bvid && !seen.has(x.bvid)) {
+              seen.add(x.bvid);
+              pool.push(x);
+            }
+          }
+        } catch (_) {}
+      }
+    };
+
+    // 时长偏好：30~180s 最佳（体积小、循环合适）> 30~360s > 其余
     const durSec = (x) => {
       const parts = String(x.duration || '').split(':').map(Number);
       if (parts.some(isNaN)) return 0;
@@ -1565,74 +1580,89 @@ ipcMain.handle('bg:fetchPipaOnline', async () => {
       if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
       return 0;
     };
-    let cands = items.filter((x) => { const d = durSec(x); return !d || (d >= 30 && d <= 360); });
-    if (cands.length < 6) cands = cands.concat(items);
-    const seen = new Set();
-    cands = cands.filter((x) => (seen.has(x.bvid) ? false : (seen.add(x.bvid), true)));
-    cands = cands.slice(0, 6);
-
-    // 3) 3 路并发：取直链 → 下载视频/音频流 → ffmpeg 合并入背景缓存（已存在跳过）
-    const cacheDir = bgCacheDir();
-    const ffmpeg = getFfmpegPath();
-    const stat = { added: 0, skipped: 0, failed: 0 };
-    let ptr = 0;
-    const worker = async () => {
-      while (ptr < cands.length) {
-        const it = cands[ptr++];
-        try {
-          const bvid = it.bvid;
-          const suffix = '_' + String(bvid).slice(-6) + '.mp4';
-          if (fs.existsSync(cacheDir)) {
-            const hit = fs.readdirSync(cacheDir).find((f) => f.endsWith(suffix));
-            if (hit) { stat.skipped++; continue; }
-          }
-          let cid = Number(it.cid) || 0;
-          let title = it.title || '';
-          if (!cid) {
-            const info = await bili.parseVideo(bvid);
-            if (!info || !info.cid) { stat.failed++; continue; }
-            cid = info.cid;
-            title = title || info.title || '';
-          }
-          // qn=16（360P）：体积小、下载合并都快，背景播放足够清晰
-          const play = await bili.getPlayUrl(bvid, cid, 16);
-          const streams = (play && play.dash) ? bili.getDashStreamUrls(play.dash, 16) : null;
-          const safe = String(title)
-            .replace(/<[^>]+>/g, '')            // 去掉搜索结果里的 <em> 高亮标记
-            .replace(/[\\/:*?"<>|\r\n\t]+/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 50) || '琵琶曲';
-          const filename = `${safe}_${String(bvid).slice(-6)}.mp4`;
-          const outPath = path.join(cacheDir, filename);
-          if (fs.existsSync(outPath)) { stat.skipped++; continue; }
-          const referer = `https://www.bilibili.com/video/${bvid}`;
-          if (!streams || !streams.videoUrl) {
-            // 无 DASH：用单流直下（durl）
-            const single = (play && (play.playUrl || (play.segments && play.segments[0] && play.segments[0].url))) || '';
-            if (!single) { stat.failed++; continue; }
-            await downloadWithProgress(single, filename, cacheDir, referer, () => {});
-            stat.added++;
-            continue;
-          }
-          const tag = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-          const tmpVideo = path.join(cacheDir, `_tmp_v_${tag}.m4s`);
-          const tmpAudio = path.join(cacheDir, `_tmp_a_${tag}.m4s`);
-          await downloadWithProgress(streams.videoBackup || streams.videoUrl, path.basename(tmpVideo), cacheDir, referer, () => {});
-          await downloadWithProgress(streams.audioBackup || streams.audioUrl, path.basename(tmpAudio), cacheDir, referer, () => {});
-          if (ffmpeg) {
-            await runFfmpeg(ffmpeg, ['-y', '-i', tmpVideo, '-i', tmpAudio, '-c', 'copy', outPath], null, filename);
-          } else {
-            // 无 ffmpeg：直接用视频流（无声但能播）
-            fs.renameSync(tmpVideo, outPath);
-          }
-          try { fs.unlinkSync(tmpVideo); } catch (_) {}
-          try { fs.unlinkSync(tmpAudio); } catch (_) {}
-          stat.added++;
-        } catch (_) { stat.failed++; }
-      }
+    const rank = (x) => {
+      const d = durSec(x);
+      if (d >= 30 && d <= 180) return 0;
+      if (d >= 30 && d <= 360) return 1;
+      return 2;
     };
-    await Promise.all([worker(), worker(), worker()]);
+    const byRank = (a, b) => rank(a) - rank(b) || (Number(b.play) || 0) - (Number(a.play) || 0);
+
+    // 处理一批候选：4 路并发，达到 stopAt（added+skipped 计数）即停
+    const downloadBatch = async (cands, stopAt) => {
+      let ptr = 0;
+      const worker = async () => {
+        while (ptr < cands.length) {
+          if (stat.added + stat.skipped >= stopAt) return;
+          const it = cands[ptr++];
+          const bvid = it.bvid;
+          if (tried.has(bvid)) continue;
+          tried.add(bvid);
+          try {
+            const suffix = '_' + String(bvid).slice(-6) + '.mp4';
+            if (fs.existsSync(cacheDir)) {
+              const hit = fs.readdirSync(cacheDir).find((f) => f.endsWith(suffix));
+              if (hit) { stat.skipped++; continue; }
+            }
+            let cid = Number(it.cid) || 0;
+            let title = it.title || '';
+            if (!cid) {
+              const info = await bili.parseVideo(bvid);
+              if (!info || !info.cid) { stat.failed++; continue; }
+              cid = info.cid;
+              title = title || info.title || '';
+            }
+            // qn=16（360P）：体积小、下载合并都快，背景播放足够清晰
+            const play = await bili.getPlayUrl(bvid, cid, 16);
+            const streams = (play && play.dash) ? bili.getDashStreamUrls(play.dash, 16) : null;
+            const safe = String(title)
+              .replace(/<[^>]+>/g, '')            // 去掉搜索结果里的 <em> 高亮标记
+              .replace(/[\\/:*?"<>|\r\n\t]+/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 50) || '琵琶曲';
+            const filename = `${safe}_${String(bvid).slice(-6)}.mp4`;
+            const outPath = path.join(cacheDir, filename);
+            if (fs.existsSync(outPath)) { stat.skipped++; continue; }
+            const referer = `https://www.bilibili.com/video/${bvid}`;
+            if (!streams || !streams.videoUrl) {
+              // 无 DASH：用单流直下（durl）
+              const single = (play && (play.playUrl || (play.segments && play.segments[0] && play.segments[0].url))) || '';
+              if (!single) { stat.failed++; continue; }
+              await downloadWithProgress(single, filename, cacheDir, referer, () => {});
+              stat.added++;
+              continue;
+            }
+            const tag = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+            const tmpVideo = path.join(cacheDir, `_tmp_v_${tag}.m4s`);
+            const tmpAudio = path.join(cacheDir, `_tmp_a_${tag}.m4s`);
+            await downloadWithProgress(streams.videoBackup || streams.videoUrl, path.basename(tmpVideo), cacheDir, referer, () => {});
+            await downloadWithProgress(streams.audioBackup || streams.audioUrl, path.basename(tmpAudio), cacheDir, referer, () => {});
+            if (ffmpeg) {
+              await runFfmpeg(ffmpeg, ['-y', '-i', tmpVideo, '-i', tmpAudio, '-c', 'copy', '-movflags', '+faststart', outPath], null, filename);
+            } else {
+              // 无 ffmpeg：直接用视频流（无声但能播）
+              fs.renameSync(tmpVideo, outPath);
+            }
+            try { fs.unlinkSync(tmpVideo); } catch (_) {}
+            try { fs.unlinkSync(tmpAudio); } catch (_) {}
+            stat.added++;
+          } catch (_) { stat.failed++; }
+        }
+      };
+      await Promise.all([worker(), worker(), worker(), worker()]);
+    };
+
+    // 第一批：搜索 1~3 页（约 60 条候选），冲目标 50
+    await collectPages([1, 2, 3]);
+    const first = pool.slice().sort(byRank).slice(0, TARGET + 10);
+    await downloadBatch(first, TARGET);
+    // 不足保底 40：再搜 4~6 页补齐
+    if (stat.added + stat.skipped < MIN) {
+      await collectPages([4, 5, 6]);
+      const rest = pool.filter((x) => !tried.has(x.bvid)).sort(byRank);
+      await downloadBatch(rest, MIN);
+    }
     if (!stat.added && !stat.skipped) return { ok: false, error: '下载琵琶曲视频失败，请稍后重试' };
     return { ok: true, added: stat.added, skipped: stat.skipped, failed: stat.failed };
   } catch (e) {

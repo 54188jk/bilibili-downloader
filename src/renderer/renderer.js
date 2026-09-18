@@ -1605,6 +1605,9 @@ $('tutorialBtn').addEventListener('click', () => App.openTutorial());
   // 首屏初始化真正完成（版本 / 保存目录 / ffmpeg / 登录态均已就绪），
   // 通知主进程关闭启动动画——进度由此事件驱动，不是定时器假装出来
   try { if (App.appReady) App.appReady(); } catch (_) {}
+
+  // 打开软件即自动静默联网获取琵琶曲背景视频（无任何提示，不打扰使用）
+  setTimeout(() => { silentFetchPipa(); }, 4000);
 })();
 
 /* ============================================================
@@ -1960,12 +1963,61 @@ function bgPlayCurrent() {
   video.src = bgFileUrl(bgVideos[bgIndex]);
   bgApplySound();
   const p = video.play();
-  if (p && p.catch) p.catch(() => {});
+  if (p && p.catch) {
+    p.catch(() => {
+      // 极少数环境自动播放被拦：静音重试一次，保证轮播不中断
+      setTimeout(() => {
+        try {
+          video.muted = true;
+          const p2 = video.play();
+          if (p2 && p2.catch) p2.catch(() => {});
+        } catch (_) {}
+      }, 300);
+    });
+  }
+}
+
+// 播完/出错 → 切下一个
+// 防护：视频背景开关未开、列表未加载、或只有一个视频时不动作
+// （关闭开关清空 src 也会触发 error 事件，不能让它又把背景播起来）
+function bgNext() {
+  if (!bgLoaded || !switchOn('videoBg') || bgVideos.length <= 1) return;
+  bgIndex = (bgIndex + 1) % bgVideos.length;
+  bgPlayCurrent();
+}
+
+// 事件只绑定一次（旧实现在 bgStart 里绑定，bgReloadAndPlay 会导致重复叠加）
+let bgEventsBound = false;
+function bgBindEvents() {
+  if (bgEventsBound) return;
+  bgEventsBound = true;
+  const video = $('bgVideo');
+  if (!video) return;
+  video.addEventListener('ended', bgNext);
+  video.addEventListener('error', bgNext);
+  // 卡死看门狗：B站 -c copy 合并的 mp4 偶发元数据时长不准——画面播到数据末尾
+  // 但 'ended' 事件不触发，视频永远停在最后一帧。播放中若 3.5 秒画面无推进
+  // 且不是暂停状态，视为播完，强制切下一个。
+  let lastTime = -1;
+  let lastMoveAt = Date.now();
+  video.addEventListener('timeupdate', () => {
+    const t = video.currentTime;
+    if (Math.abs(t - lastTime) > 0.05) {
+      lastTime = t;
+      lastMoveAt = Date.now();
+      return;
+    }
+    if (!video.paused && !video.ended && bgLoaded && bgVideos.length > 1 && Date.now() - lastMoveAt > 3500) {
+      lastMoveAt = Date.now();
+      bgNext();
+    }
+  });
 }
 
 async function bgStart() {
   const video = $('bgVideo');
   if (!video) return;
+  bgBindEvents();
   if (!bgLoaded) {
     bgVideos = await bgResolveVideos();
     if (!bgVideos.length) {
@@ -1974,8 +2026,6 @@ async function bgStart() {
     }
     bgLoaded = true;
     bgIndex = 0;
-    video.addEventListener('ended', () => { bgIndex = (bgIndex + 1) % bgVideos.length; bgPlayCurrent(); });
-    video.addEventListener('error', () => { if (bgVideos.length > 1) { bgIndex = (bgIndex + 1) % bgVideos.length; bgPlayCurrent(); } });
   }
   if (!bgVideos.length) return;
   bgPlayCurrent();
