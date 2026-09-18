@@ -150,7 +150,7 @@ function createSplash() {
     // 页面加载完成后推送版本号与真实图标
     w.webContents.once('did-finish-load', () => {
       try {
-        w.webContents.send('splash:init', { version: app.getVersion(), name: 'BiliGrab' });
+        w.webContents.send('splash:init', { version: app.getVersion(), name: 'Apple' });
         const icon = getSplashIconDataUrl();
         if (icon) w.webContents.send('splash:icon', icon);
       } catch (_) {}
@@ -666,7 +666,7 @@ ipcMain.handle('app:openTutorial', () => {
       height: 720,
       minWidth: 640,
       minHeight: 480,
-      title: 'BiliGrab 使用教程',
+      title: 'Apple 使用教程',
       backgroundColor: '#0f1220',
       autoHideMenuBar: true,
       webPreferences: {
@@ -1358,14 +1358,20 @@ function downloadWithProgress(rawUrl, filename, saveDir, referer, onProgress, re
   });
 }
 
-// ===== ffmpeg  路径检测 =====
+// ===== ffmpeg  路径检测（跨平台：Windows 为 ffmpeg.exe，macOS/Linux 为 ffmpeg）=====
 function getFfmpegPath() {
-  // 1.  开发模式：node_modules/ffmpeg-static
-  const devPath = path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', 'ffmpeg.exe');
+  const exe = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  // 1.  开发模式：node_modules/ffmpeg-static（按平台安装对应二进制）
+  const devPath = path.join(__dirname, '..', 'node_modules', 'ffmpeg-static', exe);
   if (fs.existsSync(devPath)) return devPath;
-  // 2. 打包模式：extraResources/ffmpeg.exe（在 resources/ 目录里）
-  const prodPath = path.join(process.resourcesPath, 'ffmpeg.exe');
+  // 2. 打包模式：extraResources（在 resources/ 目录里）
+  const prodPath = path.join(process.resourcesPath, exe);
   if (fs.existsSync(prodPath)) return prodPath;
+  // 3. 兜底：ffmpeg-static 模块解析（asar unpacked 场景）
+  try {
+    const p = require('ffmpeg-static');
+    if (p && fs.existsSync(p)) return p;
+  } catch (_) {}
   return null;
 }
 
@@ -1377,7 +1383,7 @@ ipcMain.handle('ffmpeg:check', () => {
 ipcMain.handle('ffmpeg:extractAudio', async (evt, { inputPath, outputName, saveDir }) => {
   try {
     const ffmpeg = getFfmpegPath();
-    if (!ffmpeg) return { ok: false, error: '未找到 ffmpeg.exe' };
+    if (!ffmpeg) return { ok: false, error: '未找到 ffmpeg' };
     const out = path.join(saveDir, outputName);
     // 优先用 libmp3lame，失败则回落到 ffmpeg  内置 mp3
     const args1 = ['-y', '-i', inputPath, '-vn', '-acodec', 'libmp3lame', '-b:a', '192k', out];
@@ -1395,7 +1401,7 @@ ipcMain.handle('ffmpeg:extractAudio', async (evt, { inputPath, outputName, saveD
 ipcMain.handle('ffmpeg:extractVideo', async (evt, { inputPath, outputName, saveDir }) => {
   try {
     const ffmpeg = getFfmpegPath();
-    if (!ffmpeg) return { ok: false, error: '未找到 ffmpeg.exe' };
+    if (!ffmpeg) return { ok: false, error: '未找到 ffmpeg' };
     const out = path.join(saveDir, outputName);
     const args = ['-y', '-i', inputPath, '-an', '-c:v', 'copy', out];
     const r = await runFfmpeg(ffmpeg, args, evt, outputName);
@@ -2654,7 +2660,7 @@ async function showDisclaimer() {
     title: '使用前请阅读 - 免责声明',
     message: '免责声明',
     detail:
-      '本软件（BiliGrab）仅用于个人学习、研究和技术交流，严禁用于任何商业用途。\n\n' +
+      '本软件（Apple）仅用于个人学习、研究和技术交流，严禁用于任何商业用途。\n\n' +
       '1. 下载内容仅供个人观看与学习，请勿二次传播、分发或用于商业牟利；\n' +
       '2. 请尊重原作者版权，下载的内容请及时删除，支持正版平台与原创作者；\n' +
       '3. 任何因违反平台规则、法律法规或侵犯他人权益的行为，均由使用者本人承担全部责任，本软件作者不承担任何连带责任；\n' +

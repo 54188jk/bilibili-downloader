@@ -1,0 +1,54 @@
+name: Build macOS (Apple)
+
+# 在 GitHub 的 macOS 云电脑上构建 Apple 版（.dmg / .zip）
+# 触发方式：
+#   1. 推送到 apple 分支（git push origin apple）→ 自动构建
+#   2. GitHub 网页 → Actions → Build macOS (Apple) → Run workflow 手动触发
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - apple
+
+jobs:
+  build-mac:
+    runs-on: macos-14
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build macOS app (arm64 + x64)
+        env:
+          # 无 Apple 开发者证书：跳过签名搜索（应用未公证，首次打开需右键 → 打开）
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac dmg zip --arm64 --x64
+
+      - name: Upload DMG (arm64)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Apple-mac-arm64-dmg
+          path: dist/*arm64*.dmg
+          if-no-files-found: warn
+
+      - name: Upload DMG (x64 / Intel)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Apple-mac-x64-dmg
+          path: dist/*x64*.dmg
+          if-no-files-found: warn
+
+      - name: Upload ZIP (all archs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Apple-mac-zip
+          path: dist/*.zip
+          if-no-files-found: warn

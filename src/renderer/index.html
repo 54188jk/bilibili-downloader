@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https: data: http: file:; media-src https: data: http: blob: file:; frame-src https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-eval'; connect-src http: https:" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BiliGrab</title>
+<title>Apple</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,7 +25,7 @@
       <svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5.014 8.764V5.236c0-.408.474-.666.86-.468l3.441 1.765a.515.515 0 0 1 0 .934l-3.44 1.765c-.387.198-.861-.06-.861-.468M.61 6.139a6.5 6.5 0 0 0 0 1.593m2.505-5.933a6.5 6.5 0 0 1 1.38-.797M1.068 4.43a6.5 6.5 0 0 1 .796-1.38"/><path d="M7.012.5c3.55 0 6.427 2.91 6.427 6.5s-2.877 6.5-6.427 6.5c-2.446 0-4.573-1.382-5.659-3.416"/></g></svg>
     </div>
     <div class="tb-title">
-      BiliGrab <span class="ver" id="appVersion">v1.0.0</span>
+      Apple <span class="ver" id="appVersion">v1.0.0</span>
     </div>
     <div class="tb-actions">
       <button class="tb-btn" id="openBiliBtn" title="打开 B 站"><svg class="ic" viewBox="0 0 14 14" fill="none"><g stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m9.25.5 2.5 2.5-2.5 2.5"/><path d="M12.25 8.25A5.25 5.25 0 1 1 7 3h4.75"/></g></svg></button>
@@ -252,7 +252,8 @@
 
           <div class="lyric-body">
             <div class="lyric-left">
-              <div class="lyric-bigicon">
+              <div class="lyric-bigicon" id="lyBigIcon">
+                <img class="lbi-cover" id="lyBigCover" alt="">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M9 18V5l10-2v13"/>
                   <circle cx="6" cy="18" r="3"/>

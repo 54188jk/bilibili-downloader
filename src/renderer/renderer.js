@@ -1,5 +1,5 @@
-﻿/* ============================================================
- * BiliGrab · 渲染层
+/* ============================================================
+ * Apple · 渲染层
  * 视觉：macOS 侧边栏设计稿（1:1）
  * 功能：全部对接 window.api 真实能力（解析 / 下载 / 登录 / 音乐 / 影视 / UC）
  * ============================================================ */
@@ -898,7 +898,7 @@ async function playSong(song, idx) {
   $('musicPP').checked = true;
   if ($('lyPlay')) $('lyPlay').checked = true;
   if ($('view-lyric')) $('view-lyric').classList.add('is-playing');
-  if (switchOn('lyrics')) loadLyrics(song.id);
+  loadLyrics(song.id);
   loadLyricPanel(song.id);
 }
 
@@ -910,8 +910,12 @@ async function loadLyrics(id) {
     // 桌面歌词窗口的 onData 需要 lines:[{time,text}] 数组，而非原始 lrc 字符串
     const lines = parseLrc(lrc);
     if (!lines.length) return;
-    const opened = await App.desktopLyricsIsOpen();
-    if (!opened || !opened.open) await App.desktopLyricsOpen();
+    // 歌词数据无条件推送（主进程侧有 isLyricsOpen 保护，窗口未开时仅记录最近载荷）；
+    // 仅当设置里的「桌面歌词」开关开启时才自动打开窗口
+    if (switchOn('lyrics')) {
+      const opened = await App.desktopLyricsIsOpen();
+      if (!opened || !opened.open) await App.desktopLyricsOpen();
+    }
     App.desktopLyricsLoad({
       title: MUSIC.current ? MUSIC.current.name : '',
       artist: MUSIC.current ? songArtist(MUSIC.current) : '',
@@ -919,6 +923,20 @@ async function loadLyrics(id) {
     });
   } catch (_) { /* 忽略 */ }
 }
+
+// 桌面歌词进度推送：无论开关状态如何都发送（窗口未开时主进程直接丢弃）
+// 携带 time + playing + duration，桌面歌词窗口才能正确显示进度与播放状态
+function pushDlTick() {
+  try {
+    App.desktopLyricsTick({
+      time: audio.currentTime || 0,
+      playing: !audio.paused && !!audio.src,
+      duration: audio.duration || 0,
+    });
+  } catch (_) {}
+}
+audio.addEventListener('play', pushDlTick);
+audio.addEventListener('pause', pushDlTick);
 
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;
@@ -933,9 +951,7 @@ audio.addEventListener('timeupdate', () => {
   if ($('lyCur')) $('lyCur').textContent = fmtTime(audio.currentTime);
   if ($('lyDur')) $('lyDur').textContent = fmtTime(audio.duration);
   updateLyricHighlight(audio.currentTime);
-  if (switchOn('lyrics')) {
-    try { App.desktopLyricsTick({ time: audio.currentTime }); } catch (_) {}
-  }
+  pushDlTick();
 });
 audio.addEventListener('ended', () => {
   if (MUSIC.index >= 0 && MUSIC.index < MUSIC.list.length - 1) playSong(MUSIC.list[MUSIC.index + 1], MUSIC.index + 1);
@@ -1029,6 +1045,25 @@ function updateLyricHighlight(t) {
 function syncLyricPlayerUI() {
   const song = MUSIC.current;
   if ($('lyCover') && song) { const c = songCover(song); if (c) $('lyCover').src = c; }
+  // 歌词页大图标：有歌曲封面时显示封面图（圆形），无封面/加载失败时回退音符图标
+  const bigIcon = $('lyBigIcon');
+  if (bigIcon) {
+    const img = $('lyBigCover');
+    const c = song ? songCover(song) : '';
+    if (img) {
+      if (c) {
+        if (img.getAttribute('src') !== c) {
+          img.onerror = () => bigIcon.classList.remove('has-cover');
+          img.src = c;
+        }
+        bigIcon.classList.add('has-cover');
+      } else {
+        img.onerror = null;
+        img.removeAttribute('src');
+        bigIcon.classList.remove('has-cover');
+      }
+    }
+  }
   if ($('lyName')) $('lyName').textContent = song ? (song.name || '未知歌曲') : '未在播放';
   if ($('lySub')) $('lySub').textContent = song ? (songArtist(song) + (songAlbum(song) ? ' · ' + songAlbum(song) : '')) : '搜索后点击歌曲即可播放';
   if ($('lySongInfo')) $('lySongInfo').textContent = song ? ((song.name || '未知歌曲') + ' - ' + (songArtist(song) || '未知歌手')) : '暂无播放';

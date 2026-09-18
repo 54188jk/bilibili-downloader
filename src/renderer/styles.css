@@ -1,6 +1,6 @@
 
 /* ============================================================
-   BiliGrab · Apple 风（macOS 系统克制风）
+   Apple · Apple 风（macOS 系统克制风）
    - 系统字体：-apple-system / SF Pro / PingFang SC（去 Sora）
    - 纯色按钮，无渐变、无霓虹辉光
    - 克制毛玻璃（blur + saturate，无径向光晕）
@@ -414,6 +414,9 @@ body.dark .hist-folder:hover{border-color:rgba(10,132,255,.45)}
 .lyric-left{width:330px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
 .lyric-bigicon{position:relative;width:150px;height:150px;display:grid;place-items:center;color:var(--lyric-accent)}
 .lyric-bigicon svg{width:78px;height:78px;filter:drop-shadow(0 4px 18px color-mix(in srgb,var(--lyric-accent) 45%,transparent))}
+.lyric-bigicon .lbi-cover{display:none;position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;background:var(--control-bg);box-shadow:0 6px 20px rgba(0,0,0,.14)}
+.lyric-bigicon.has-cover .lbi-cover{display:block}
+.lyric-bigicon.has-cover svg{display:none}
 .lyric-bigicon .lbi-ring{position:absolute;inset:0;border-radius:50%;border:2px solid color-mix(in srgb,var(--lyric-accent) 35%,transparent);opacity:.6}
 #view-lyric.is-playing .lyric-bigicon .lbi-ring{animation:lyricPulse 2.4s ease-in-out infinite}
 @keyframes lyricPulse{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.08);opacity:.15}}

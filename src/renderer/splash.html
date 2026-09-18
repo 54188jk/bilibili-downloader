@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: file:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self' 'unsafe-inline'" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BiliGrab</title>
+<title>Apple</title>
 <!-- 网络字体异步加载：离线时直接回落系统字体，不阻塞首屏 -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600&family=JetBrains+Mono:wght@500&display=swap" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="splash.css">
@@ -36,7 +36,7 @@
     <div class="logo-ring"></div>
   </div>
 
-  <h1 class="app-name">BiliGrab</h1>
+  <h1 class="app-name">Apple</h1>
   <p class="app-sub">视频下载 · 音乐 · 影视 · 私信</p>
 
   <div class="progress">
@@ -51,7 +51,7 @@
   </div>
 </main>
 
-<div class="foot" id="footText">BiliGrab</div>
+<div class="foot" id="footText">Apple</div>
 
 <script>
 (function () {
@@ -67,7 +67,7 @@
   var current = 0;      // 当前显示进度
   var target = 0;       // 目标进度（主进程真实事件下发）
   var timer = null;
-  var footBase = 'BiliGrab';
+  var footBase = 'Apple';
   var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
 
   // 真实耗时显示：计时从页面首帧开始，反映实际启动用时
@@ -109,7 +109,7 @@
   var api = window.splash;
   if (api) {
     api.onInit(function (d) {
-      if (d && d.version) footBase = 'BiliGrab  v' + d.version;
+      if (d && d.version) footBase = 'Apple  v' + d.version;
     });
     api.onIcon(function (dataUrl) {
       if (!dataUrl) return;

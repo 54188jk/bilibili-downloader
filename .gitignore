@@ -60,3 +60,9 @@ diagnose.cjs
 contrast.cjs
 verify-theme.cjs
 probe.cjs
+
+# --- Apple 版本地调试产物 ---
+gh2.txt
+github_push_err.txt
+verify_bigicon.cjs
+verify_dl.cjs

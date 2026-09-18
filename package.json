@@ -1,5 +1,5 @@
 {
-  "name": "biligrab",
+  "name": "apple",
   "version": "1.4.2",
   "description": "B 站 / 抖音 / 网易云音乐下载器（Electron 桌面应用）",
   "main": "src/main.js",
@@ -15,7 +15,7 @@
     "downloader",
     "electron"
   ],
-  "author": "BiliGrab",
+  "author": "Apple",
   "license": "MIT",
   "devDependencies": {
     "electron": "^32.3.3",
@@ -23,8 +23,8 @@
     "ws": "^8.21.3"
   },
   "build": {
-    "appId": "com.biligrab.app",
-    "productName": "BiliGrab",
+    "appId": "com.biligrab.apple",
+    "productName": "Apple",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -45,10 +45,6 @@
     ],
     "afterPack": "./scripts/after-pack.cjs",
     "extraResources": [
-      {
-        "from": "node_modules/ffmpeg-static/ffmpeg.exe",
-        "to": "ffmpeg.exe"
-      },
       {
         "from": "build/icon.png",
         "to": "icon.png"
@@ -73,23 +69,45 @@
           "sha256"
         ],
         "rfc3161TimeStampServer": "http://timestamp.digicert.com"
-      }
+      },
+      "extraResources": [
+        {
+          "from": "node_modules/ffmpeg-static/ffmpeg.exe",
+          "to": "ffmpeg.exe"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "BiliGrab",
+      "shortcutName": "Apple",
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "differentialPackage": false
     },
     "portable": {
-      "artifactName": "BiliGrab-portable.exe"
+      "artifactName": "Apple-portable.exe"
     },
     "mac": {
-      "target": "dmg",
-      "category": "public.app-category.video"
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.video",
+      "icon": "build/icon-mac.png",
+      "identity": null,
+      "darkModeSupport": true,
+      "artifactName": "Apple-mac-${version}-${arch}.${ext}",
+      "extraResources": [
+        {
+          "from": "node_modules/ffmpeg-static/ffmpeg",
+          "to": "ffmpeg"
+        }
+      ],
+      "extendInfo": {
+        "NSHumanReadableCopyright": "仅供个人学习、研究和技术交流使用"
+      }
     }
   },
   "optionalDependencies": {
