@@ -30,7 +30,9 @@ jobs:
         env:
           # 无 Apple 开发者证书：跳过签名搜索（应用未公证，首次打开需右键 → 打开）
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder --mac dmg zip --arm64 --x64
+          # 仅本地构建产物，不发布 GitHub Release
+          EP_PUBLISH: never
+        run: npx electron-builder --mac dmg zip --arm64 --x64 --publish never
 
       - name: Upload DMG (arm64)
         uses: actions/upload-artifact@v4
