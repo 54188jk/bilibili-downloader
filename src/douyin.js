@@ -315,6 +315,8 @@ async function searchVideoByKeyword(keyword, cookie = '') {
     // 其他错误（风控/签名失效等）明确透传，不再静默返回空列表
     return { needLogin: false, list: [], error: json.status_msg || ('搜索失败 code ' + status) };
   }
+  // status === 0 但 data 非数组（结构异常/无结果）：给出统一结构，避免主进程 r.list 崩溃
+  return { needLogin: false, list: [], error: json.status_msg || '未搜索到相关视频' };
 }
 
 // 通过 aweme_id 直接解析无水印视频（复用现有逻辑）

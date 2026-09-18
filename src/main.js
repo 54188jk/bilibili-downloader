@@ -346,6 +346,13 @@ function createLyricsWindow() {
   lyricsWin.setIgnoreMouseEvents(false);
   lyricsWin.loadFile(path.join(__dirname, 'renderer', 'desktop-lyrics.html'));
 
+  // 窗口渲染完成后再补发一次歌词/颜色，避免首次打开时推送被丢弃导致桌面歌词空白
+  lyricsWin.webContents.once('did-finish-load', () => {
+    if (lastLyricsPayload) {
+      try { lyricsWin.webContents.send('desktop-lyrics:data', lastLyricsPayload); } catch (_) {}
+    }
+  });
+
   // 拖动后记住位置
   let moveSaveTimer = null;
   const onMoved = () => {
@@ -467,7 +474,11 @@ ipcMain.on('lyrics:musicControl', (_evt, action) => {
 });
 
 // 主窗口渲染进程 → 桌面歌词窗口：整首歌歌词
+// 保存最近一次歌词载荷：窗口首次打开时渲染脚本的 ipc 监听尚未注册，
+// 立即推送会被丢弃，故在窗口 did-finish-load 时补发一次。
+let lastLyricsPayload = null;
 ipcMain.on('desktop-lyrics:load', (_evt, payload) => {
+  lastLyricsPayload = payload;
   if (isLyricsOpen()) lyricsWin.webContents.send('desktop-lyrics:data', payload);
 });
 
@@ -518,17 +529,23 @@ function getBuiltinAiSecrets() {
 }
 
 async function streamAiChat(event, modelId, messages, reqId) {
+  // 渲染层在流式过程中可能已关闭/导航：统一用安全发送，避免对已销毁 webContents 抛错
+  const send = (channel, payload) => {
+    try {
+      if (event.sender && !event.sender.isDestroyed()) event.sender.send(channel, payload);
+    } catch (_) {}
+  };
   let cfg = null;
   if (modelId === 'builtin' || modelId === 'auto') {
     cfg = getBuiltinAiSecrets();
     if (!cfg) {
-      event.sender.send('ai:done', { reqId, ok: false, error: '内置模型未配置（开发者尚未填写密钥）' });
+      send('ai:done', { reqId, ok: false, error: '内置模型未配置（开发者尚未填写密钥）' });
       return;
     }
   } else {
     cfg = loadCustomAiModels().find((m) => m.id === modelId);
     if (!cfg) {
-      event.sender.send('ai:done', { reqId, ok: false, error: '未找到该自定义模型，请先在「模型管理」中添加' });
+      send('ai:done', { reqId, ok: false, error: '未找到该自定义模型，请先在「模型管理」中添加' });
       return;
     }
   }
@@ -542,7 +559,7 @@ async function streamAiChat(event, modelId, messages, reqId) {
     if (!resp.ok) {
       let detail = '';
       try { detail = (await resp.text()).slice(0, 240); } catch (_) {}
-      event.sender.send('ai:done', { reqId, ok: false, error: 'HTTP ' + resp.status + (detail ? ' · ' + detail : '') });
+      send('ai:done', { reqId, ok: false, error: 'HTTP ' + resp.status + (detail ? ' · ' + detail : '') });
       return;
     }
     const reader = resp.body.getReader();
@@ -562,13 +579,13 @@ async function streamAiChat(event, modelId, messages, reqId) {
         try {
           const json = JSON.parse(data);
           const delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
-          if (delta) event.sender.send('ai:chunk', { reqId, delta });
+          if (delta) send('ai:chunk', { reqId, delta });
         } catch (_) { /* 跳过非 JSON 行（如注释） */ }
       }
     }
-    event.sender.send('ai:done', { reqId, ok: true });
+    send('ai:done', { reqId, ok: true });
   } catch (e) {
-    event.sender.send('ai:done', { reqId, ok: false, error: String((e && e.message) || e) });
+    send('ai:done', { reqId, ok: false, error: String((e && e.message) || e) });
   }
 }
 
@@ -1550,6 +1567,8 @@ ipcMain.handle('bg:fetchPipaOnline', async () => {
   bgFetchInFlight = true;
   const TARGET = 50, MIN = 40;
   const stat = { added: 0, skipped: 0, failed: 0 };
+  const KEYWORDS = ['琵琶曲', '琵琶 纯音乐', '琵琶 古曲', '琵琶独奏', '琵琶 名曲', '琵琶 轻音乐', '琵琶 古风'];
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     const cacheDir = bgCacheDir();
     const ffmpeg = getFfmpegPath();
@@ -1557,18 +1576,46 @@ ipcMain.handle('bg:fetchPipaOnline', async () => {
     const tried = new Set();
     let pool = [];
 
-    const collectPages = async (pages) => {
-      for (const pg of pages) {
-        if (stat.added + stat.skipped >= TARGET) return;
+    // 带退避重试：规避 B 站 -412 风控（无重试时偶发整批失败，导致只下到 1~2 个）
+    const searchWithRetry = async (kw, pg) => {
+      for (let a = 0; a < 4; a++) {
+        try { const r = await bili.searchVideo(kw, pg); if (Array.isArray(r) && r.length) return r; } catch (_) {}
+        await sleep(600 * (a + 1));
+      }
+      return [];
+    };
+    const parseWithRetry = async (bvid) => {
+      for (let a = 0; a < 3; a++) {
+        try { const info = await bili.parseVideo(bvid); if (info && info.cid) return info; } catch (_) {}
+        await sleep(500 * (a + 1));
+      }
+      return null;
+    };
+    const playWithRetry = async (bvid, cid) => {
+      for (let a = 0; a < 3; a++) {
         try {
-          const r = await bili.searchVideo('琵琶曲', pg);
-          for (const x of (r || [])) {
+          const play = await bili.getPlayUrl(bvid, cid, 16);
+          if (play && (play.dash || play.playUrl || (play.segments && play.segments[0]))) return play;
+        } catch (_) {}
+        await sleep(500 * (a + 1));
+      }
+      return null;
+    };
+
+    const collectPages = async (keywords, pages) => {
+      for (const kw of keywords) {
+        if (stat.added + stat.skipped >= TARGET) return;
+        for (const pg of pages) {
+          if (stat.added + stat.skipped >= TARGET) return;
+          const r = await searchWithRetry(kw, pg);
+          for (const x of r) {
             if (x && x.type === 'video' && x.bvid && !seen.has(x.bvid)) {
               seen.add(x.bvid);
               pool.push(x);
             }
           }
-        } catch (_) {}
+          await sleep(350);
+        }
       }
     };
 
@@ -1607,13 +1654,13 @@ ipcMain.handle('bg:fetchPipaOnline', async () => {
             let cid = Number(it.cid) || 0;
             let title = it.title || '';
             if (!cid) {
-              const info = await bili.parseVideo(bvid);
+              const info = await parseWithRetry(bvid);
               if (!info || !info.cid) { stat.failed++; continue; }
               cid = info.cid;
               title = title || info.title || '';
             }
             // qn=16（360P）：体积小、下载合并都快，背景播放足够清晰
-            const play = await bili.getPlayUrl(bvid, cid, 16);
+            const play = await playWithRetry(bvid, cid);
             const streams = (play && play.dash) ? bili.getDashStreamUrls(play.dash, 16) : null;
             const safe = String(title)
               .replace(/<[^>]+>/g, '')            // 去掉搜索结果里的 <em> 高亮标记
@@ -1653,13 +1700,13 @@ ipcMain.handle('bg:fetchPipaOnline', async () => {
       await Promise.all([worker(), worker(), worker(), worker()]);
     };
 
-    // 第一批：搜索 1~3 页（约 60 条候选），冲目标 50
-    await collectPages([1, 2, 3]);
+    // 第一批：多关键词搜索 1~3 页，冲目标 50
+    await collectPages(KEYWORDS, [1, 2, 3]);
     const first = pool.slice().sort(byRank).slice(0, TARGET + 10);
     await downloadBatch(first, TARGET);
     // 不足保底 40：再搜 4~6 页补齐
     if (stat.added + stat.skipped < MIN) {
-      await collectPages([4, 5, 6]);
+      await collectPages(KEYWORDS, [4, 5, 6]);
       const rest = pool.filter((x) => !tried.has(x.bvid)).sort(byRank);
       await downloadBatch(rest, MIN);
     }

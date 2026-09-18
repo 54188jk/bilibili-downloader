@@ -48,7 +48,7 @@ function ensureToken() {
 // 启动本地音乐 API（幂等），端口被占用时自动向上重试
 const MAX_PORT_RETRY = 20;
 async function ensureServer() {
-  if (started && server && server.listening) return { ok: true, port: PORT };
+  if (started && server && server.listening) return { ok: true, port: currentPort };
   ensureToken();
   for (let attempt = 0; attempt <= MAX_PORT_RETRY; attempt++) {
     const tryPort = PORT + attempt;

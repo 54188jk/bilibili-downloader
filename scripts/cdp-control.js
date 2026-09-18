@@ -97,14 +97,15 @@ async function main() {
       }
       case 'click': {
         const sel = args[0];
-        const js = `document.querySelector('${sel}')?.click(); 'clicked ${sel}'`;
+        // 用 JSON.stringify 转义，避免选择器中的引号破坏 JS 字符串
+        const js = `document.querySelector(${JSON.stringify(sel)})?.click(); 'clicked'`;
         const result = await send('Runtime.evaluate', { expression: js, returnByValue: true });
         console.log(result.result?.value);
         break;
       }
       case 'set': {
         const [sel, val] = args;
-        const js = `(() => { const el = document.querySelector('${sel}'); if(el) { el.value = '${val}'; el.dispatchEvent(new Event('input',{bubbles:true})); return 'set'; } return 'not found'; })()`;
+        const js = `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if(el) { el.value = ${JSON.stringify(val)}; el.dispatchEvent(new Event('input',{bubbles:true})); return 'set'; } return 'not found'; })()`;
         const result = await send('Runtime.evaluate', { expression: js, returnByValue: true });
         console.log(result.result?.value);
         break;
@@ -145,9 +146,8 @@ async function main() {
       }
       case 'test-parsers': {
         console.log('Testing parsers via Electron iframe...');
+        // renderer 模块依赖 DOM/electron，不能在 Node 中 require；CDP eval 也取不到模块变量
         const js = `(() => {
-          const parsers = ${JSON.stringify(require('../src/renderer/renderer.js').MOVIE_PARSER_PRESETS || [])};
-          // 这个需要在renderer里跑，CDP eval跑不到模块变量
           return 'Use movie panel UI to test parsers. Or run: node scripts/test-parsers.js';
         })()`;
         const result = await send('Runtime.evaluate', { expression: js, returnByValue: true });

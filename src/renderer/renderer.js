@@ -92,6 +92,11 @@ function showLoading(text) {
 }
 function hideLoading() { $('loadingMask').classList.add('hidden'); }
 
+// 兜底：所有 showLoading 调用点都未对「主进程 IPC 调用被拒绝」做 try/catch，
+// 一旦 await 的 App.* 调用 reject，hideLoading 会被跳过，遮罩永久卡在「处理中」。
+// 此处统一监听未捕获的 Promise 拒绝，确保遮罩一定能被关掉，避免界面假死。
+window.addEventListener('unhandledrejection', () => { try { hideLoading(); } catch (_) {} });
+
 function setDot(el, cls) { if (el) el.className = 'dot ' + cls; }
 
 /* ---------------- 主题 ---------------- */
@@ -181,7 +186,11 @@ document.querySelectorAll('.switch[data-key]').forEach((el) => {
     try { obj = JSON.parse(localStorage.getItem(SWITCH_KEY) || '{}'); } catch (_) { obj = {}; }
     obj[el.dataset.key] = el.classList.contains('on');
     localStorage.setItem(SWITCH_KEY, JSON.stringify(obj));
-    if (el.dataset.key === 'lyrics' && App.desktopLyricsToggle) App.desktopLyricsToggle();
+    if (el.dataset.key === 'lyrics' && App.desktopLyricsToggle) {
+      App.desktopLyricsToggle();
+      // 开启桌面歌词时若正在播放歌曲，立即补发当前歌曲歌词（否则需切歌才显示）
+      if (el.classList.contains('on') && MUSIC.current) loadLyrics(MUSIC.current.id);
+    }
     if (el.dataset.key === 'videoBg') {
       applyVideoBg(el.classList.contains('on'));
       // 开启视频背景（内置视频）时：自动静默联网获取琵琶曲，无任何弹窗
@@ -764,11 +773,23 @@ async function musicApi(path, query) {
 }
 
 function songCover(song) {
+  if (!song) return '';
   const al = song.al || song.album || {};
-  if (al.picUrl) return al.picUrl.replace(/^http:/, 'https:');
+  const fix = (u) => (u ? String(u).replace(/^http:/, 'https:') : '');
+  if (al.picUrl) return fix(al.picUrl);
   if (al.pic) return 'https://p2.music.126.net/' + al.pic + '.jpg';
-  if (song.picUrl) return song.picUrl.replace(/^http:/, 'https:');
+  if (song.picUrl) return fix(song.picUrl);
+  if (song.pic) return fix(song.pic);        // B站视频封面
+  if (song.cover) return fix(song.cover);
+  if (song.imageUrl) return fix(song.imageUrl);
   return '';
+}
+
+// 记录音乐封面默认占位图（index.html 内置 SVG），加载失败时回退，避免破图
+const MUSIC_COVER_DEFAULT = (() => { const el = document.getElementById('musicCover'); return el ? el.src : ''; })();
+function resetMusicCover() {
+  const el = $('musicCover');
+  if (el) { el.onerror = null; el.src = MUSIC_COVER_DEFAULT; }
 }
 function songArtist(song) {
   return (song.artists || song.ar || []).map((a) => a.name).join(' / ') || '未知歌手';
@@ -856,7 +877,11 @@ async function playSong(song, idx) {
   if (idx != null) MUSIC.index = idx;
   MUSIC.current = song;
   const cover = songCover(song);
-  if (cover) $('musicCover').src = cover;
+  if (cover) {
+    const el = $('musicCover');
+    el.onerror = resetMusicCover;   // 封面加载失败（防盗链/网络）时回退默认图，而非破图
+    el.src = cover;
+  }
   $('musicName').textContent = song.name || '未知歌曲';
   $('musicSub').textContent = songArtist(song) + (songAlbum(song) ? ' · ' + songAlbum(song) : '');
   $('musicDur').textContent = song.dt ? fmtTime(song.dt / 1000) : '--:--';
@@ -882,9 +907,16 @@ async function loadLyrics(id) {
     const d = await musicApi('/lyric', { id });
     const lrc = d && d.lrc && d.lrc.lyric;
     if (!lrc) return;
+    // 桌面歌词窗口的 onData 需要 lines:[{time,text}] 数组，而非原始 lrc 字符串
+    const lines = parseLrc(lrc);
+    if (!lines.length) return;
     const opened = await App.desktopLyricsIsOpen();
     if (!opened || !opened.open) await App.desktopLyricsOpen();
-    App.desktopLyricsLoad({ title: MUSIC.current ? MUSIC.current.name : '', lrc });
+    App.desktopLyricsLoad({
+      title: MUSIC.current ? MUSIC.current.name : '',
+      artist: MUSIC.current ? songArtist(MUSIC.current) : '',
+      lines,
+    });
   } catch (_) { /* 忽略 */ }
 }
 

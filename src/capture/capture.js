@@ -20,7 +20,6 @@ let overlayWin = null;   // 区域截图遮罩窗
 let editorWin = null;    // 标注编辑窗
 let pinWins = [];        // 贴图窗
 let recorderWin = null;  // 录屏控制窗
-let mediaWin = null;      // 录屏用的隐藏采集窗（持有一块屏幕的 capture stream）
 
 function ensureDirs() {
   try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch (_) {}
@@ -240,40 +239,43 @@ async function captureLongScreenshot(mainWin, view) {
     return img.toDataURL();
   }
   
-  const { scrollHeight, clientHeight, scrollWidth, clientWidth } = dims;
+  const { scrollHeight, clientHeight, scrollWidth } = dims;
   const steps = Math.ceil(scrollHeight / clientHeight);
   updateScrollProgress(10, `开始拼接 (${steps} 段)…`);
-  
+
   const originalScroll = await wc.executeJavaScript('window.scrollY || document.documentElement.scrollTop || 0').catch(() => 0);
-  
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = scrollWidth;
-  canvas.height = scrollHeight;
-  
+
+  // 逐段滚动并截取（capturePage 是主进程 API，需在循环外采集 dataURL）
+  const segments = [];
   for (let i = 0; i < steps; i++) {
     const y = i * clientHeight;
     updateScrollProgress(10 + Math.round((i / steps) * 80), `捕获第 ${i+1}/${steps} 段…`);
-    
+
     await wc.executeJavaScript(`window.scrollTo(0, ${y});`);
     await new Promise(r => setTimeout(r, 300));
-    
+
     const img = await wc.capturePage({ x: 0, y: 0, width: scrollWidth, height: clientHeight });
-    const bitmap = img.toPNG();
-    
-    const partImg = new Image();
-    await new Promise((resolve, reject) => {
-      partImg.onload = resolve;
-      partImg.onerror = reject;
-      partImg.src = 'data:image/png;base64,' + bitmap.toString('base64');
-    });
-    ctx.drawImage(partImg, 0, y);
+    segments.push(img.toDataURL());
   }
-  
+
   await wc.executeJavaScript(`window.scrollTo(0, ${originalScroll});`);
-  
+
   updateScrollProgress(95, '生成最终图片…');
-  return canvas.toDataURL('image/png');
+  // 主进程无 DOM/canvas，拼接放到 webview 内用 canvas 完成
+  const finalDataURL = await wc.executeJavaScript(`
+    (async (segs, w, h, ch) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      for (let i = 0; i < segs.length; i++) {
+        const partImg = new Image();
+        await new Promise((resolve, reject) => { partImg.onload = resolve; partImg.onerror = reject; partImg.src = segs[i]; });
+        ctx.drawImage(partImg, 0, i * ch);
+      }
+      return canvas.toDataURL('image/png');
+    })(${JSON.stringify(segments)}, ${scrollWidth}, ${scrollHeight}, ${clientHeight})
+  `);
+  return finalDataURL;
 }
 
 /* ============================================================
@@ -531,6 +533,8 @@ function registerIpc() {
     } catch (e) { return { ok: false, error: e.message }; }
   });
   ipcMain.on('capture:recorder-close', () => { if (recorderWin) { try { recorderWin.close(); } catch (_) {} recorderWin = null; } });
+  // 退出前释放 OCR worker，避免子进程残留
+  app.on('before-quit', () => { if (ocrWorker) { try { ocrWorker.terminate(); } catch (_) {} ocrWorker = null; } });
 }
 
 function init({ mainWindowGetter }) {

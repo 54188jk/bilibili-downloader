@@ -90,7 +90,10 @@ async function ensureImWindow() {
   try {
     if (!ctx) throw new Error('douyin-im 未初始化');
     const saved = ctx.loadDyAuth();
-    if (!saved || !saved.cookie || !ctx.isDyLoggedIn(ctx.getDouyinCookieHeader().map)) {
+    // getDouyinCookieHeader 是异步函数，必须 await；否则拿到的 .map 是 undefined，
+    // 会让 isDyLoggedIn 永远返回 false，私信功能永远报 NEED_LOGIN
+    const auth = await ctx.getDouyinCookieHeader();
+    if (!saved || !saved.cookie || !ctx.isDyLoggedIn(auth.map)) {
       throw new Error('NEED_LOGIN');
     }
     // 把持久化的 cookie 注入默认 session，保证隐藏窗口是登录态
@@ -338,7 +341,9 @@ async function status() {
   let ok = false;
   try {
     const saved = ctx.loadDyAuth();
-    if (saved && saved.cookie && ctx.isDyLoggedIn(ctx.getDouyinCookieHeader().map)) ok = true;
+    // 同样需 await 异步的 getDouyinCookieHeader，否则 .map 为 undefined
+    const auth = await ctx.getDouyinCookieHeader();
+    if (saved && saved.cookie && ctx.isDyLoggedIn(auth.map)) ok = true;
   } catch (_) {}
   return { ok: true, isLogin: ok };
 }

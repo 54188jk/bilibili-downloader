@@ -33,11 +33,15 @@ function grabDouyinVideo(awemeId) {
           }
         } catch (_) {}
         try {
-          grabSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
-            const t = details.resourceType;
-            if (t === 'image' || t === 'media' || t === 'font' || t === 'stylesheet') return callback({ cancel: true });
-            callback({});
-          });
+          // 持久化会话：拦截器只注册一次，避免每次解析都叠加监听器（资源泄漏）
+          if (!grabSession.__dyGrabHooked) {
+            grabSession.__dyGrabHooked = true;
+            grabSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
+              const t = details.resourceType;
+              if (t === 'image' || t === 'media' || t === 'font' || t === 'stylesheet') return callback({ cancel: true });
+              callback({});
+            });
+          }
         } catch (_) {}
 
         const win = new BrowserWindow({
@@ -56,6 +60,7 @@ function grabDouyinVideo(awemeId) {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          try { if (dbg.isAttached()) dbg.detach(); } catch (_) {}
           try { win.destroy(); } catch (_) {}
           resolve(obj);
         }

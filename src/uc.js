@@ -10,8 +10,6 @@
 'use strict';
 
 const { URL } = require('url');
-const https = require('https');
-const http = require('http');
 
 // ============================================================
 // 链接提取
@@ -51,78 +49,6 @@ function inspectShareMeta(input) {
   // 提取码：通常 ?pwd=xxxx
   const passcode = u.searchParams.get('pwd') || u.searchParams.get('code') || '';
   return { pwdId, isPublic, passcode };
-}
-
-// ============================================================
-// HTTP 工具
-// ============================================================
-function httpPost(url, body, headers) {
-  return new Promise((resolve, reject) => {
-    let parsed;
-    try { parsed = new URL(url); } catch (e) { return reject(new Error('URL 非法')); }
-    const lib = parsed.protocol === 'https:' ? https : http;
-    const data = typeof body === 'string' ? body : JSON.stringify(body);
-    const req = lib.request({
-      method: 'POST',
-      hostname: parsed.hostname,
-      port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
-      path: parsed.pathname + parsed.search,
-      headers: Object.assign({
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data),
-        'Accept': 'application/json, text/plain, */*',
-        'Origin': 'https://drive.uc.cn',
-        'Referer': 'https://drive.uc.cn/',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      }, headers || {}),
-    }, res => {
-      let chunks = '';
-      res.on('data', c => { chunks += c; if (chunks.length > 4 * 1024 * 1024) res.destroy(); });
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: chunks }));
-    });
-    req.on('error', reject);
-    req.setTimeout(20000, () => req.destroy(new Error('请求超时')));
-    req.write(data);
-    req.end();
-  });
-}
-
-// ============================================================
-// 隐藏窗口加载分享页（建立 cookie / 获取 base info）
-// ============================================================
-function loadSharePage(shareUrl) {
-  return new Promise((resolve, reject) => {
-    const { app, BrowserWindow } = require('electron');
-    const win = new BrowserWindow({
-      show: false,
-      width: 1100,
-      height: 750,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
-    });
-    win.webContents.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36');
-
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) { settled = true; try { win.destroy(); } catch (_) {} reject(new Error('UC 分享页加载超时')); }
-    }, 25000);
-
-    win.webContents.once('did-finish-load', async () => {
-      // 等渲染稳定后再抓
-      await new Promise(r => setTimeout(r, 1500));
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      try { win.destroy(); } catch (_) {}
-      resolve();
-    });
-    win.webContents.once('did-fail-load', (_e, code, desc) => {
-      if (!settled) { settled = true; clearTimeout(timer); try { win.destroy(); } catch (_) {} reject(new Error('UC 分享页加载失败：' + desc)); }
-    });
-
-    win.loadURL(shareUrl).catch(err => {
-      if (!settled) { settled = true; clearTimeout(timer); try { win.destroy(); } catch (_) {} reject(err); }
-    });
-  });
 }
 
 // 调分享详情 API（需要在已加载分享页的窗口中执行以共享 cookie）

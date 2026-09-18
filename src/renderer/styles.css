@@ -453,6 +453,51 @@ body.dark .hist-folder:hover{border-color:rgba(10,132,255,.45)}
 .statusbar .s-right{margin-left:auto;display:flex;gap:16px;color:var(--ink-3)}
 .statusbar b{color:var(--ink);font-weight:600}
 
+/* 深色模式下：状态栏改为深色半透明毛玻璃（默认浅色渐变在暗色下会发白） */
+body.dark .statusbar{
+  background:linear-gradient(90deg,rgba(22,22,24,.62),rgba(16,16,18,.52));
+  color:var(--ink-2);
+  border-top:.5px solid rgba(255,255,255,.08);
+}
+body.dark .statusbar::before{
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);
+}
+body.dark .statusbar .s-sep{background:rgba(255,255,255,.12)}
+body.dark .statusbar .s-right{color:var(--ink-3)}
+
+/* ===== 深色模式：主界面毛玻璃骨架（顶栏/侧栏/输入区/菜单/弹窗） =====
+   这些组件原本用硬编码浅色渐变，无 body.dark 覆盖，深色模式下整片发白。
+   下面统一改为深色半透明毛玻璃，保持同样的克制质感。 */
+body.dark .titlebar{
+  background:linear-gradient(180deg,rgba(28,28,30,.72),rgba(20,20,22,.55));
+  border-bottom:.5px solid rgba(255,255,255,.08);
+}
+body.dark .titlebar::after{
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
+}
+body.dark .sidebar{
+  background:linear-gradient(180deg,rgba(30,30,32,.70),rgba(22,22,24,.52));
+  border-right:.5px solid rgba(255,255,255,.08);
+}
+body.dark .sidebar::after{
+  background:linear-gradient(to bottom,transparent,rgba(255,255,255,.10),transparent);
+}
+body.dark .chat-compose{
+  background:linear-gradient(180deg,rgba(22,22,24,.72),rgba(16,16,18,.55));
+  border-top:.5px solid rgba(255,255,255,.08);
+}
+body.dark .chat-compose::before{
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.12),transparent);
+}
+body.dark .model-menu{
+  background:linear-gradient(180deg,rgba(36,36,38,.94),rgba(26,26,28,.88));
+  border:.5px solid rgba(255,255,255,.10);
+}
+body.dark .modal{
+  background:linear-gradient(180deg,rgba(38,38,40,.94),rgba(28,28,30,.88));
+  border:.5px solid rgba(255,255,255,.10);
+}
+
 /* Toast */
 .toast{position:fixed;top:calc(var(--tb-h) + 8px);left:50%;transform:translateX(-50%);padding:8px 16px;border-radius:999px;z-index:200;
   background:var(--glass-ultra);
