@@ -1,3 +1,8 @@
 {
-  "douyinKey": ""
+  "douyinKey": "",
+  "dyApiList": [
+    { "name": "远梦DyVideo", "url": "https://api.qzqi.com/api/v1/DyVideo?url={url}&apikey={key}", "key": "" },
+    { "name": "接口盒子", "url": "https://cn.apihz.cn/api/fun/douyin.php?id={id}&key={key}&url={url}", "id": "", "key": "" },
+    { "name": "自定义接口", "url": "" }
+  ]
 }

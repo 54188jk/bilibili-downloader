@@ -169,6 +169,105 @@ async function parseViaTjit(shareUrl) {
 }
 
 // ========================
+// 通用第三方解析线路：按 config.dyApiList 模板并发调用
+// 模板变量：{url}=编码后的分享链接 {key}=密钥 {id}=用户ID {aweme}=aweme_id
+// 只要第三方接口返回 JSON（字段名随意），pickVideoDeep 都能挖出播放地址
+// ========================
+function withTimeout(p, ms, tag) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(tag + ' 超时 ' + ms + 'ms')), ms);
+    p.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+
+// 从任意结构 JSON 深度挖：播放地址 / 封面 / 标题 / 作者
+function pickVideoDeep(root) {
+  const out = { videoUrl: '', cover: '', title: '', author: '' };
+  const VIDEO_RE = /(\.mp4(\?|#|$))|aweme\/v1\/play|douyinvod|v\d+-dy[-.](cold|a|b)|douyin-iesdouyin/i;
+  const IMG_RE = /(douyinpic|\.jpe?g(\?|$)|\.png(\?|$)|\.webp(\?|$))/i;
+  const queue = [root];
+  let seen = 0;
+  const TITLE_KEYS = /^(desc|title|content|caption)$/i;
+  const AUTHOR_KEYS = /^(nickname|author|author_name|user_name|name|uname)$/i;
+  const COVER_KEYS = /^(cover|cover_url|coverUrl|image|img|poster|origin_cover|avatar)$/i;
+  while (queue.length && seen < 3000) {
+    const cur = queue.shift();
+    seen++;
+    if (typeof cur === 'string') {
+      if (!out.videoUrl && VIDEO_RE.test(cur) && /^https?:/i.test(cur)) out.videoUrl = cur;
+      else if (!out.cover && IMG_RE.test(cur) && /^https?:/i.test(cur)) out.cover = cur;
+      continue;
+    }
+    if (Array.isArray(cur)) { queue.push(...cur.slice(0, 60)); continue; }
+    if (cur && typeof cur === 'object') {
+      for (const [k, v] of Object.entries(cur)) {
+        if (typeof v === 'string') {
+          if (!out.videoUrl && VIDEO_RE.test(v) && /^https?:/i.test(v)) { out.videoUrl = v; continue; }
+          if (TITLE_KEYS.test(k) && !out.title && v.trim()) { out.title = v.trim().slice(0, 120); continue; }
+          if (AUTHOR_KEYS.test(k) && !out.author && v.trim()) { out.author = v.trim().slice(0, 40); continue; }
+          if (COVER_KEYS.test(k) && !out.cover && IMG_RE.test(v)) { out.cover = v; continue; }
+        } else if (v && typeof v === 'object') queue.push(v);
+      }
+    }
+  }
+  // 去水印：playwm -> play
+  if (out.videoUrl) out.videoUrl = out.videoUrl.replace('/playwm', '/play');
+  return out;
+}
+
+// 识别第三方接口的业务错误（各家门口径不一，取最像的那句）
+function pickApiError(json) {
+  if (!json || typeof json !== 'object') return '';
+  if (json.success === false || json.ok === false) {
+    const e = json.error;
+    return String((e && (e.message || e.msg)) || json.message || json.msg || json.code || '接口返回失败').slice(0, 120);
+  }
+  if (json.code !== undefined && json.code !== 200 && json.code !== 1 && json.code !== '200' && json.code !== '1') {
+    return String(json.msg || json.message || json.error || ('错误码 ' + json.code)).slice(0, 120);
+  }
+  return '';
+}
+
+// 读取 config.dyApiList：返回模板齐全且已填 key 的线路
+function listConfiguredApis() {
+  const cfg = loadConfig();
+  const list = Array.isArray(cfg.dyApiList) ? cfg.dyApiList : [];
+  const out = [];
+  for (const api of list) {
+    if (!api || typeof api.url !== 'string') continue;
+    const tpl = api.url.trim();
+    if (!tpl || !tpl.startsWith('http')) continue;
+    // 模板声明了 {key} 或 {id} 但没填值 → 跳过（避免无谓请求拿"秘钥错误"）
+    if (/\{key\}/.test(tpl) && !(api.key || '').trim()) continue;
+    if (/\{id\}/.test(tpl) && !(api.id || '').trim()) continue;
+    out.push({ name: String(api.name || '第三方接口').slice(0, 24), url: tpl, key: String(api.key || ''), id: String(api.id || '') });
+  }
+  return out;
+}
+
+async function parseViaNamedApi(shareUrl, api, awemeId = '') {
+  const full = api.url
+    .replace('{url}', encodeURIComponent(shareUrl))
+    .replace('{key}', encodeURIComponent(api.key || ''))
+    .replace('{id}', encodeURIComponent(api.id || ''))
+    .replace('{aweme}', encodeURIComponent(awemeId || ''));
+  const body = await withTimeout(httpGetPlain(full), 8000, api.name);
+  let json;
+  try { json = JSON.parse(body); } catch (_) { throw new Error(api.name + ': 返回不是 JSON'); }
+  const err = pickApiError(json);
+  const picked = pickVideoDeep(json);
+  if (!picked.videoUrl) throw new Error(api.name + ': ' + (err || '未找到播放地址'));
+  return {
+    awemeId: awemeId || '',
+    title: picked.title || '抖音视频',
+    cover: picked.cover || '',
+    videoUrl: picked.videoUrl,
+    author: picked.author || '',
+  };
+}
+
+
+// ========================
 // 备选方案：iesdouyin 分享页抓取
 // ========================
 // 从 HTML 中按键取值并解析成 JSON 片段（带括号深度与字符串状态机）
@@ -412,5 +511,8 @@ module.exports = {
   searchVideoByKeyword,
   parseByAwemeId,
   parseViaTjit,
+  parseViaNamedApi,
+  listConfiguredApis,
+  pickVideoDeep,
   loadConfig,
 };

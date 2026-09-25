@@ -96,39 +96,66 @@ async function resolveDouyinShare(url) {
   const urlHit = cacheGet(urlCache, url);
   if (urlHit) return { ok: true, data: urlHit.data, source: urlHit.source + '+cache' };
 
-  const awemeId = await pickAwemeId(url);
+  const t0 = Date.now();
 
-  // 2) ID 级缓存：不同形态的链接指向同一视频同样命中
-  if (awemeId) {
-    const hit = cacheGet(idCache, awemeId);
-    if (hit) { cacheSet(awemeId, hit, url); return { ok: true, data: hit.data, source: hit.source + '+cache' }; }
+  // 2) 快线路池（不依赖 aweme_id，立即并发发出）：
+  //    a) config.dyApiList 里配置的第三方接口（绕开本机 IP 风控，填 key 即启用）
+  //    b) tjit（config.douyinKey）
+  const tasks = [];
+  for (const api of douyin.listConfiguredApis()) {
+    tasks.push(
+      douyin.parseViaNamedApi(url, api).then(
+        d => ({ ok: !!d.videoUrl, data: d, source: 'api:' + api.name }),
+        e => ({ ok: false, error: e.message }),
+      ),
+    );
   }
-
-  if (!awemeId) {
-    const r = await douyin.parseShare(url); // 没有 ID 只能走第三方/分享文本线路
-    return r.ok ? { ok: true, data: r.data, source: r.source } : r;
-  }
-
-  // 3) 快线路：HTTP 分享页（0.3~0.6s 出结果）+ 可选 tjit 第三方接口
-  const fastTasks = [douyin.parseByAwemeId(awemeId)];
   const key = (douyin.loadConfig().douyinKey || '').trim();
   if (key) {
-    fastTasks.push(
+    tasks.push(
       douyin.parseViaTjit(url)
-        .then(data => ({ ok: !!data.videoUrl, data, source: 'tjit' }))
+        .then(d => ({ ok: !!d.videoUrl, data: d, source: 'tjit' }))
         .catch(e => ({ ok: false, error: e.message })),
     );
   }
 
-  // 4) 延迟 450ms 启动本地窗口：快线路能搞定就把它取消掉（等于没开窗口）
-  const final = await raceWithDelayed(fastTasks, FAST_DELAY_MS, () =>
-    grabDouyinVideo(awemeId).then(
-      r => (r && r.ok ? { ok: true, data: r.data, source: r.source || 'local' } : r),
-      e => ({ ok: false, error: e && e.message }),
-    ));
+  // 3) 解析 aweme_id（短链跳转，与上面线路并行进行）+ ID 级缓存
+  const awemeId = await pickAwemeId(url);
+  if (awemeId) {
+    const hit = cacheGet(idCache, awemeId);
+    if (hit) { cacheSet(awemeId, hit, url); return { ok: true, data: hit.data, source: hit.source + '+cache' }; }
+    // 本机直连分享页线路（受本机 IP 风控影响，正常网络下 0.3~0.6s 出结果）
+    tasks.push(
+      douyin.parseByAwemeId(awemeId).then(
+        d => ({ ok: !!d.videoUrl, data: d, source: 'share' }),
+        e => ({ ok: false, error: e.message }),
+      ),
+    );
+  }
 
-  if (final.ok) cacheSet(awemeId, final, url);
-  return final;
+  // 4) 延迟启动本地窗口（自快线路发出起满 450ms；短链跳转已耗掉的时间计入其中）
+  const delay = Math.max(0, FAST_DELAY_MS - (Date.now() - t0));
+  const final = tasks.length
+    ? await raceWithDelayed(tasks, delay, () => {
+        if (!awemeId) return Promise.resolve({ ok: false, error: '未提取到视频ID，跳过窗口抓取' });
+        return grabDouyinVideo(awemeId).then(
+          r => (r && r.ok ? { ok: true, data: r.data, source: r.source || 'local' } : r),
+          e => ({ ok: false, error: e && e.message }),
+        );
+      })
+    : null;
+
+  if (final) {
+    if (final.ok) { cacheSet(awemeId, final, url); return final; }
+    // 所有快线路 + 窗口都失败：最后再试一次纯第三方 parseShare（无 key 时直接返回失败）
+    const r = await douyin.parseShare(url).catch(e => ({ ok: false, error: e.message }));
+    if (r.ok) { cacheSet(awemeId, { ok: true, data: r.data, source: r.source }, url); return { ok: true, data: r.data, source: r.source }; }
+    return final;
+  }
+
+  // 完全没有可用线路（无 aweme_id 也无第三方配置）→ 走原有兜底
+  const r = await douyin.parseShare(url);
+  return r.ok ? { ok: true, data: r.data, source: r.source } : r;
 }
 
 module.exports = { resolveDouyinShare, pickError, cacheSet };
