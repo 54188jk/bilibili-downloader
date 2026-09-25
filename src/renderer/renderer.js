@@ -762,7 +762,7 @@ $('ksDownloadBtn').addEventListener('click', () => downloadShort(state.ksItems, 
  * 音乐（网易云本地 API）
  * ============================================================ */
 const audio = $('musicAudio');
-const MUSIC = { list: [], index: -1, current: null };
+const MUSIC = { list: [], index: -1, current: null, multiSelect: false, selected: new Set(), playlistMode: false, playlistName: '', playlistSongs: [] };
 
 async function musicApi(path, query) {
   try {
@@ -806,19 +806,43 @@ function renderSongs(songs) {
   songs.forEach((song, idx) => {
     const row = document.createElement('div');
     row.className = 'song-row';
+    if (MUSIC.multiSelect && MUSIC.selected.has(idx)) row.classList.add('selected');
     const cover = songCover(song);
+    const checkSvg = '<svg class="ic-s" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" d="M2.5 7.5l3 3 6-6.5"/></svg>';
     row.innerHTML = `
+      <div class="song-check">${checkSvg}</div>
       ${cover ? '<img class="song-thumb" src="' + escapeHtml(cover) + '" alt="">' : '<div class="song-thumb" style="background:var(--control-bg)"></div>'}
       <div class="song-main">
         <div class="song-name">${escapeHtml(song.name || '未知歌曲')}</div>
         <div class="song-artist">${escapeHtml(songArtist(song))}${songAlbum(song) ? ' · ' + escapeHtml(songAlbum(song)) : ''}</div>
       </div>
       <span class="song-dur">${song.dt ? fmtTime(song.dt / 1000) : (song.duration ? fmtTime(song.duration / 1000) : '--:--')}</span>`;
-    row.addEventListener('click', () => playSong(song, idx));
-    row.addEventListener('dblclick', () => downloadSong(song));
+    if (MUSIC.multiSelect) {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.song-check')) {
+          // 点击复选框：切换选中
+          toggleSelect(idx);
+          e.stopPropagation();
+          return;
+        }
+        toggleSelect(idx);
+      });
+    } else {
+      row.addEventListener('click', () => playSong(song, idx));
+      row.addEventListener('dblclick', () => downloadSong(song));
+    }
     box.appendChild(row);
   });
   $('musicCount').textContent = '共 ' + songs.length + ' 首';
+  if (MUSIC.multiSelect) {
+    $('musicMultiBtn').textContent = '退出多选';
+    $('musicDlSelBtn').style.display = 'flex';
+    box.querySelectorAll('.song-row').forEach((r) => r.classList.add('multi'));
+  } else {
+    $('musicMultiBtn').textContent = '多选';
+    $('musicDlSelBtn').style.display = 'none';
+    box.querySelectorAll('.song-row').forEach((r) => r.classList.remove('multi'));
+  }
 }
 
 $('musicSearchBtn').addEventListener('click', doMusicSearch);
@@ -835,6 +859,15 @@ async function doMusicSearch() {
   if (!songs.length) { toast('没有搜索结果', 'warn'); return; }
   MUSIC.list = songs;
   MUSIC.index = -1;
+  MUSIC.playlistMode = false;
+  MUSIC.playlistName = '';
+  MUSIC.playlistSongs = [];
+  MUSIC.multiSelect = false;
+  MUSIC.selected.clear();
+  // 显示工具栏，隐藏合集返回键
+  $('musicToolbar').style.display = 'flex';
+  $('musicPlBackBtn').style.display = 'none';
+  $('musicDlAllBtn').textContent = '下载全部';
   renderSongs(songs);
   toast('搜索到 ' + songs.length + ' 首');
 }
@@ -898,7 +931,7 @@ async function playSong(song, idx) {
   $('musicPP').checked = true;
   if ($('lyPlay')) $('lyPlay').checked = true;
   if ($('view-lyric')) $('view-lyric').classList.add('is-playing');
-  if (switchOn('lyrics')) loadLyrics(song.id);
+  loadLyrics(song.id);
   loadLyricPanel(song.id);
 }
 
@@ -910,8 +943,12 @@ async function loadLyrics(id) {
     // 桌面歌词窗口的 onData 需要 lines:[{time,text}] 数组，而非原始 lrc 字符串
     const lines = parseLrc(lrc);
     if (!lines.length) return;
-    const opened = await App.desktopLyricsIsOpen();
-    if (!opened || !opened.open) await App.desktopLyricsOpen();
+    // 歌词数据无条件推送（主进程侧有 isLyricsOpen 保护，窗口未开时仅记录最近载荷）；
+    // 仅当设置里的「桌面歌词」开关开启时才自动打开窗口
+    if (switchOn('lyrics')) {
+      const opened = await App.desktopLyricsIsOpen();
+      if (!opened || !opened.open) await App.desktopLyricsOpen();
+    }
     App.desktopLyricsLoad({
       title: MUSIC.current ? MUSIC.current.name : '',
       artist: MUSIC.current ? songArtist(MUSIC.current) : '',
@@ -919,6 +956,20 @@ async function loadLyrics(id) {
     });
   } catch (_) { /* 忽略 */ }
 }
+
+// 桌面歌词进度推送：无论开关状态如何都发送（窗口未开时主进程直接丢弃）
+// 携带 time + playing + duration，桌面歌词窗口才能正确显示进度与播放状态
+function pushDlTick() {
+  try {
+    App.desktopLyricsTick({
+      time: audio.currentTime || 0,
+      playing: !audio.paused && !!audio.src,
+      duration: audio.duration || 0,
+    });
+  } catch (_) {}
+}
+audio.addEventListener('play', pushDlTick);
+audio.addEventListener('pause', pushDlTick);
 
 audio.addEventListener('timeupdate', () => {
   if (!audio.duration) return;
@@ -933,9 +984,7 @@ audio.addEventListener('timeupdate', () => {
   if ($('lyCur')) $('lyCur').textContent = fmtTime(audio.currentTime);
   if ($('lyDur')) $('lyDur').textContent = fmtTime(audio.duration);
   updateLyricHighlight(audio.currentTime);
-  if (switchOn('lyrics')) {
-    try { App.desktopLyricsTick({ time: audio.currentTime }); } catch (_) {}
-  }
+  pushDlTick();
 });
 audio.addEventListener('ended', () => {
   if (MUSIC.index >= 0 && MUSIC.index < MUSIC.list.length - 1) playSong(MUSIC.list[MUSIC.index + 1], MUSIC.index + 1);
@@ -1029,6 +1078,25 @@ function updateLyricHighlight(t) {
 function syncLyricPlayerUI() {
   const song = MUSIC.current;
   if ($('lyCover') && song) { const c = songCover(song); if (c) $('lyCover').src = c; }
+  // 歌词页大图标：有歌曲封面时显示封面图（圆形），无封面/加载失败时回退音符图标
+  const bigIcon = $('lyBigIcon');
+  if (bigIcon) {
+    const img = $('lyBigCover');
+    const c = song ? songCover(song) : '';
+    if (img) {
+      if (c) {
+        if (img.getAttribute('src') !== c) {
+          img.onerror = () => bigIcon.classList.remove('has-cover');
+          img.src = c;
+        }
+        bigIcon.classList.add('has-cover');
+      } else {
+        img.onerror = null;
+        img.removeAttribute('src');
+        bigIcon.classList.remove('has-cover');
+      }
+    }
+  }
   if ($('lyName')) $('lyName').textContent = song ? (song.name || '未知歌曲') : '未在播放';
   if ($('lySub')) $('lySub').textContent = song ? (songArtist(song) + (songAlbum(song) ? ' · ' + songAlbum(song) : '')) : '搜索后点击歌曲即可播放';
   if ($('lySongInfo')) $('lySongInfo').textContent = song ? ((song.name || '未知歌曲') + ' - ' + (songArtist(song) || '未知歌手')) : '暂无播放';
@@ -1123,6 +1191,119 @@ async function downloadSong(song) {
   toast('下载完成：' + filename);
   if (switchOn('openAfter')) App.showInFolder(r.path);
 }
+
+/* ======== 音乐返回键 ======== */
+$('musicBackBtn').addEventListener('click', () => goView('lyric'));
+
+/* ======== 音乐合集返回键 ======== */
+$('musicPlBackBtn').addEventListener('click', () => {
+  MUSIC.playlistMode = false;
+  MUSIC.playlistName = '';
+  MUSIC.playlistSongs = [];
+  MUSIC.multiSelect = false;
+  MUSIC.selected.clear();
+  $('musicPlBackBtn').style.display = 'none';
+  $('musicDlAllBtn').textContent = '下载全部';
+  renderSongs(MUSIC.list);
+  toast('已返回搜索结果');
+});
+
+/* ======== 选择下载目录 ======== */
+$('musicPickDirBtn').addEventListener('click', async () => {
+  const d = await App.pickSaveDir();
+  if (d) {
+    state.saveDir = d;
+    localStorage.setItem('biligrab.saveDir', d);
+    toast('已选择下载目录：' + d);
+  }
+});
+
+/* ======== 多选模式 ======== */
+$('musicMultiBtn').addEventListener('click', () => {
+  if (!MUSIC.list.length) { toast('暂无歌曲', 'warn'); return; }
+  MUSIC.multiSelect = !MUSIC.multiSelect;
+  if (!MUSIC.multiSelect) MUSIC.selected.clear();
+  renderSongs(MUSIC.list);
+  if (MUSIC.multiSelect) toast('已进入多选模式，点击歌曲选择/取消');
+});
+
+function toggleSelect(idx) {
+  if (MUSIC.selected.has(idx)) {
+    MUSIC.selected.delete(idx);
+  } else {
+    MUSIC.selected.add(idx);
+  }
+  // 更新选中行的样式
+  const rows = $('musicList').querySelectorAll('.song-row');
+  rows.forEach((r) => {
+    const i = Array.from(rows).indexOf(r);
+    r.classList.toggle('selected', MUSIC.selected.has(i));
+  });
+}
+
+/* ======== 下载全部音乐 ======== */
+$('musicDlAllBtn').addEventListener('click', async () => {
+  if (!MUSIC.list.length) { toast('暂无歌曲', 'warn'); return; }
+  let saveDir = state.saveDir;
+  if (!saveDir) {
+    saveDir = await App.getDefaultSaveDir();
+    if (!saveDir) { toast('请先选择下载目录', 'error'); return; }
+  }
+  const songs = MUSIC.playlistMode && MUSIC.playlistSongs.length ? MUSIC.playlistSongs : MUSIC.list;
+  if (!songs.length) { toast('暂无歌曲', 'warn'); return; }
+  toast('开始下载全部 ' + songs.length + ' 首歌曲');
+  for (let i = 0; i < songs.length; i++) {
+    const song = songs[i];
+    const filename = sanitizeFilename((song.name || '未知') + ' - ' + songArtist(song)) + '.mp3';
+    const taskId = 'mus_all_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 6);
+    addTask({ id: taskId, name: filename, progress: 0, status: 'running' });
+    const url = await fetchSongUrl(song.id);
+    if (!url) {
+      updateTask(taskId, { status: 'error', error: '无播放地址' });
+      continue;
+    }
+    const r = await App.musicDownload({ url, filename, saveDir });
+    if (!r.ok) {
+      updateTask(taskId, { status: 'error', error: r.error });
+      continue;
+    }
+    updateTask(taskId, { progress: 100, status: 'done', path: r.path });
+  }
+  toast('全部下载任务已提交（共 ' + songs.length + ' 首）');
+});
+
+/* ======== 下载选中音乐 ======== */
+$('musicDlSelBtn').addEventListener('click', async () => {
+  if (!MUSIC.selected.size) { toast('请先选择歌曲', 'warn'); return; }
+  let saveDir = state.saveDir;
+  if (!saveDir) {
+    saveDir = await App.getDefaultSaveDir();
+    if (!saveDir) { toast('请先选择下载目录', 'error'); return; }
+  }
+  const songs = MUSIC.list;
+  const selectedCount = MUSIC.selected.size;
+  toast('开始下载选中的 ' + selectedCount + ' 首歌曲');
+  for (const idx of MUSIC.selected) {
+    const song = songs[idx];
+    if (!song) continue;
+    const filename = sanitizeFilename((song.name || '未知') + ' - ' + songArtist(song)) + '.mp3';
+    const taskId = 'mus_sel_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 6);
+    addTask({ id: taskId, name: filename, progress: 0, status: 'running' });
+    const url = await fetchSongUrl(song.id);
+    if (!url) {
+      updateTask(taskId, { status: 'error', error: '无播放地址' });
+      continue;
+    }
+    const r = await App.musicDownload({ url, filename, saveDir });
+    if (!r.ok) {
+      updateTask(taskId, { status: 'error', error: r.error });
+      continue;
+    }
+    updateTask(taskId, { progress: 100, status: 'done', path: r.path });
+  }
+  toast('选中下载任务已提交（共 ' + selectedCount + ' 首）');
+});
+
 $('musicDownloadBtn').addEventListener('click', () => downloadSong(null));
 
 $('musicHotBtn').addEventListener('click', async () => {
@@ -1145,9 +1326,20 @@ $('musicImportBtn').addEventListener('click', async () => {
   const d = await musicApi('/playlist/detail', { id: id.trim() });
   const pl = d && d.playlist;
   if (!pl) { toast('歌单不存在或无法访问', 'error'); return; }
-  MUSIC.list = pl.tracks || [];
+  const songs = pl.tracks || [];
+  if (!songs.length) { toast('歌单为空', 'warn'); return; }
+  MUSIC.list = songs;
   MUSIC.index = -1;
-  renderSongs(MUSIC.list);
+  MUSIC.playlistMode = true;
+  MUSIC.playlistName = pl.name || '导入歌单';
+  MUSIC.playlistSongs = songs;
+  MUSIC.multiSelect = false;
+  MUSIC.selected.clear();
+  $('musicToolbar').style.display = 'flex';
+  $('musicPlBackBtn').style.display = 'inline-block';
+  $('musicDlAllBtn').textContent = '下载合集';
+  renderSongs(songs);
+  $('musicCount').textContent = MUSIC.playlistName + ' · ' + songs.length + ' 首';
   toast('已导入：' + (pl.name || ''));
 });
 $('musicLoginBtn').addEventListener('click', async () => {
@@ -1179,12 +1371,26 @@ function renderPlaylists(list) {
       if (!songs.length) { toast('歌单为空', 'warn'); return; }
       MUSIC.list = songs;
       MUSIC.index = -1;
+      MUSIC.playlistMode = true;
+      MUSIC.playlistName = pl.name || '歌单';
+      MUSIC.playlistSongs = songs;
+      MUSIC.multiSelect = false;
+      MUSIC.selected.clear();
+      // 显示工具栏和合集返回键
+      $('musicToolbar').style.display = 'flex';
+      $('musicPlBackBtn').style.display = 'inline-block';
+      $('musicDlAllBtn').textContent = '下载合集';
       renderSongs(songs);
+      $('musicCount').textContent = MUSIC.playlistName + ' · ' + songs.length + ' 首';
       toast('已加载歌单：' + (pl.name || ''));
     });
     box.appendChild(row);
   });
   $('musicCount').textContent = '共 ' + list.length + ' 个歌单';
+  // 显示工具栏（合集列表视图）
+  $('musicToolbar').style.display = 'flex';
+  $('musicPlBackBtn').style.display = 'inline-block';
+  $('musicDlAllBtn').textContent = '下载全部';
 }
 
 $('lyricsBtn').addEventListener('click', async () => {

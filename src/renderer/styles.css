@@ -229,6 +229,18 @@ svg.ic-s{width:13px;height:13px;flex-shrink:0;stroke-width:1.6}
 .btn-row{display:flex;gap:8px;margin-top:14px}
 .btn-row .btn{flex:1}
 
+/* 音乐工具栏 */
+.music-toolbar{display:flex;gap:8px;align-items:center}
+.music-toolbar .btn{flex:1;font-size:13px;padding:7px 10px}
+
+/* 多选复选框 */
+.song-check{display:none;width:18px;height:18px;flex-shrink:0;cursor:pointer}
+.song-row.multi .song-check{display:flex;align-items:center;justify-content:center}
+.song-row.multi .song-thumb{width:42px;height:42px}
+.song-row.multi .song-main{flex:1;min-width:0}
+.song-row.selected{background:var(--accent-soft);border-color:var(--accent) !important}
+.song-row.selected .song-check svg{fill:var(--accent);stroke:var(--accent)}
+
 /* 分段控件 */
 .seg{display:inline-flex;gap:2px;padding:2px;background:var(--control-bg);border-radius:var(--r-m)}
 .seg button{border:none;background:transparent;color:var(--ink-2);font-size:12.5px;font-family:inherit;padding:5px 12px;border-radius:var(--r-s);cursor:pointer;transition:all .15s var(--ease);white-space:nowrap;display:flex;align-items:center;gap:5px}
@@ -414,6 +426,9 @@ body.dark .hist-folder:hover{border-color:rgba(10,132,255,.45)}
 .lyric-left{width:330px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px}
 .lyric-bigicon{position:relative;width:150px;height:150px;display:grid;place-items:center;color:var(--lyric-accent)}
 .lyric-bigicon svg{width:78px;height:78px;filter:drop-shadow(0 4px 18px color-mix(in srgb,var(--lyric-accent) 45%,transparent))}
+.lyric-bigicon .lbi-cover{display:none;position:absolute;inset:0;width:100%;height:100%;border-radius:50%;object-fit:cover;background:var(--control-bg);box-shadow:0 6px 20px rgba(0,0,0,.14)}
+.lyric-bigicon.has-cover .lbi-cover{display:block}
+.lyric-bigicon.has-cover svg{display:none}
 .lyric-bigicon .lbi-ring{position:absolute;inset:0;border-radius:50%;border:2px solid color-mix(in srgb,var(--lyric-accent) 35%,transparent);opacity:.6}
 #view-lyric.is-playing .lyric-bigicon .lbi-ring{animation:lyricPulse 2.4s ease-in-out infinite}
 @keyframes lyricPulse{0%,100%{transform:scale(1);opacity:.55}50%{transform:scale(1.08);opacity:.15}}

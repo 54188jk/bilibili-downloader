@@ -187,7 +187,12 @@
 
       <!-- ===== 音乐 ===== -->
       <section class="view" id="view-music">
-        <div class="view-head"><h1>本地音乐</h1><p>网易云音乐搜索、歌单导入与无损下载</p></div>
+        <div class="view-head">
+          <button class="btn btn-ghost music-back-btn" id="musicBackBtn" title="返回歌词页" style="margin-right:12px;flex-shrink:0">
+            <svg class="ic" viewBox="0 0 14 14" fill="none"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" d="M9 2.5 4 7l5 4.5"/></svg>
+          </button>
+          <h1>本地音乐</h1><p>网易云音乐搜索、歌单导入与无损下载</p>
+        </div>
         <div class="card">
           <div class="row">
             <div class="field">
@@ -220,6 +225,13 @@
           </div>
 
           <div class="card-head" style="margin:18px 0 4px"><h2>搜索结果</h2><span class="card-sub" id="musicCount">共 0 首</span></div>
+          <div class="music-toolbar" id="musicToolbar" style="display:none;margin-bottom:8px">
+            <button class="btn btn-gray" id="musicDlAllBtn" style="flex:1">下载全部</button>
+            <button class="btn btn-gray" id="musicMultiBtn" style="flex:1">多选</button>
+            <button class="btn btn-gray" id="musicPickDirBtn" style="flex:1">选择下载目录</button>
+            <button class="btn btn-primary" id="musicDlSelBtn" style="flex:1;display:none">下载选中</button>
+            <button class="btn btn-ghost" id="musicPlBackBtn" style="display:none">← 返回搜索</button>
+          </div>
           <div id="musicList"></div>
           <div class="btn-row" style="margin-top:16px">
             <button class="btn btn-gray" id="musicHotBtn" style="flex:1">热门歌单</button>
@@ -252,7 +264,8 @@
 
           <div class="lyric-body">
             <div class="lyric-left">
-              <div class="lyric-bigicon">
+              <div class="lyric-bigicon" id="lyBigIcon">
+                <img class="lbi-cover" id="lyBigCover" alt="">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M9 18V5l10-2v13"/>
                   <circle cx="6" cy="18" r="3"/>

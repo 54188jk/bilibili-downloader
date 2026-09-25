@@ -176,9 +176,26 @@
        ============================================ */
     #meta {
       position: absolute; top: 10px; left: 18px;
-      height: 46px; display: flex; flex-direction: column; justify-content: center;
-      gap: 3px; z-index: 4; pointer-events: none;
+      display: flex; flex-direction: row; align-items: center; gap: 10px;
+      z-index: 4; pointer-events: none;
       opacity: 0.92; transition: transform .3s ease, opacity .3s ease;
+    }
+    /* 音乐图标：播放时像唱片一样旋转，暂停时停在当前角度 */
+    #metaIcon {
+      width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(12px) saturate(160%);
+      -webkit-backdrop-filter: blur(12px) saturate(160%);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.12);
+    }
+    #metaIcon svg { width: 16px; height: 16px; animation: iconSpin 7s linear infinite; animation-play-state: paused; }
+    body[data-playing="true"] #metaIcon svg { animation-play-state: running; }
+    @keyframes iconSpin { to { transform: rotate(360deg); } }
+    .meta-text {
+      display: flex; flex-direction: column; justify-content: center; gap: 3px;
     }
     #metaTitle {
       font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.95);
@@ -380,7 +397,7 @@
     }
 
     /* ============================================
-       进度条 — 液态玻璃
+       进度条 — 液态玻璃（常驻：未播放也显示轨道，播放时随音乐从左到右推进）
        ============================================ */
     #progress {
       position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
@@ -398,6 +415,18 @@
       transition: width .35s linear;
       position: relative;
     }
+    /* 播放中：进度条内部流光从左到右流动，随音乐推进 */
+    body[data-playing="true"] #progressBar {
+      background: linear-gradient(90deg,
+        var(--accent-soft), var(--accent), var(--accent-glow),
+        var(--accent), var(--accent-soft));
+      background-size: 200% 100%;
+      animation: progressFlow 2.8s linear infinite;
+    }
+    @keyframes progressFlow {
+      from { background-position: 0% 0; }
+      to { background-position: 200% 0; }
+    }
     /* 进度条头部光点 */
     #progressBar::after {
       content: '';
@@ -408,6 +437,7 @@
       opacity: 0;
       transition: opacity .3s;
     }
+    body[data-playing="true"] #progressBar::after,
     #progressBar[style*="width"]:not([style*="width: 0%"]):not([style*="width:0%"])::after { opacity: 1; }
 
     #time {
@@ -503,7 +533,7 @@
     }
   </style>
 </head>
-<body data-lock="false" data-hover="false" data-bg="transparent" data-mode="triple" data-theme="teal">
+<body data-lock="false" data-hover="false" data-bg="transparent" data-mode="triple" data-theme="teal" data-playing="false">
   <div id="stage">
     <!-- 液态玻璃装饰层 -->
     <div id="ambientOrbs">
@@ -515,9 +545,18 @@
     <div id="dragStrip" title="按住可拖动"></div>
 
     <div id="meta">
-      <div id="metaTitle">—</div>
-      <div id="metaArtist">—</div>
-      <span id="lockedHint">已锁定 · 悬停顶部解锁</span>
+      <div id="metaIcon" title="正在播放">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6.4 12.6V3.6l7.6-1.7v8.6"/>
+          <circle cx="4.5" cy="12.6" r="1.9"/>
+          <circle cx="12.1" cy="10.5" r="1.9"/>
+        </svg>
+      </div>
+      <div class="meta-text">
+        <div id="metaTitle">—</div>
+        <div id="metaArtist">—</div>
+        <span id="lockedHint">已锁定 · 悬停顶部解锁</span>
+      </div>
     </div>
 
     <div id="controls">
@@ -756,6 +795,8 @@
       cur.time = p.time || 0;
       cur.playing = !!p.playing;
       cur.duration = p.duration || cur.duration;
+      // 播放状态驱动：图标旋转 / 进度条流光（未播放时常驻显示但静止）
+      body.setAttribute('data-playing', String(cur.playing));
       seekLine();
       renderProgress();
       const icon = $('playPauseIcon');
