@@ -40,7 +40,19 @@ function request(url, opts = {}) {
       }
       let data = '';
       const maxLen = 5 * 1024 * 1024;
-      res.on('data', c => { data += c; if (data.length > maxLen) res.destroy(); });
+      res.on('data', c => {
+        data += c;
+        if (data.length > maxLen) return res.destroy();
+        // 流式提前终止：数据够用（已能取出 play_addr）就立刻断开，不等整页下载完
+        if (opts.earlyStop && res.statusCode === 200) {
+          let stop = false;
+          try { stop = !!opts.earlyStop(data); } catch (_) {}
+          if (stop) {
+            res.destroy();
+            return resolve({ status: res.statusCode, headers: res.headers, finalUrl: url, body: data });
+          }
+        }
+      });
       res.on('end', () => resolve({
         status: res.statusCode,
         headers: res.headers,
@@ -65,6 +77,10 @@ async function followRedirect(url, depth = 0) {
   const loc = r.headers.location;
   if (loc && r.status >= 300 && r.status < 400) {
     const next = loc.startsWith('http') ? loc : new URL(loc, url).toString();
+    // 提前退出：这一跳的目标地址里已经带 aweme_id，就没有必要再跟下一跳（省 1~2 个 RTT）
+    if (extractAwemeId(next)) {
+      return { status: r.status, headers: r.headers, finalUrl: next, body: '' };
+    }
     return followRedirect(next, depth + 1);
   }
   return r;
@@ -155,49 +171,64 @@ async function parseViaTjit(shareUrl) {
 // ========================
 // 备选方案：iesdouyin 分享页抓取
 // ========================
+// 从 HTML 中按键取值并解析成 JSON 片段（带括号深度与字符串状态机）
+function pickJson(body, keys) {
+  const keyList = Array.isArray(keys) ? keys : [keys];
+  for (const k of keyList) {
+    const idx = body.indexOf(k);
+    if (idx >= 0) {
+      let start = body.indexOf(':', idx + k.length);
+      if (start < 0) continue;
+      start += 1;
+      while (body[start] === ' ') start++;
+      let end = start, depth = 0, inStr = false;
+      for (; end < body.length; end++) {
+        const ch = body[end];
+        if (inStr) {
+          if (ch === '\\') { end++; continue; }
+          if (ch === '"') inStr = false;
+          continue;
+        }
+        if (ch === '"') { inStr = true; continue; }
+        if (ch === '{' || ch === '[') depth++;
+        if (ch === '}' || ch === ']') {
+          depth--;
+          if (depth === 0) { end++; break; }
+        }
+      }
+      const frag = body.slice(start, end);
+      try { return JSON.parse(frag); } catch (_) { continue; }
+    }
+  }
+  return null;
+}
+
+// play_addr 是否已经完整到达（用于流式提前断流）
+function hasPlayableAddr(buf) {
+  if (buf.indexOf('play_addr') < 0) return false;
+  const pa = pickJson(buf, ['"play_addr"', 'play_addr']);
+  return !!(pa && Array.isArray(pa.url_list) && pa.url_list.length);
+}
+
 async function fetchShareData(awemeId) {
-  const r = await request(`https://www.iesdouyin.com/share/video/${awemeId}`);
+  // 流式请求：只要 play_addr 到手就立刻断开连接，
+  // 分享页完整 HTML 动辄数 MB，提前终止可省掉大半下载时间
+  const r = await request(`https://www.iesdouyin.com/share/video/${awemeId}`, {
+    timeoutMs: 10000,
+    earlyStop: hasPlayableAddr,
+  });
   if (r.status !== 200) throw new Error('分享页请求失败 HTTP ' + r.status);
 
   const body = r.body;
+  if (!hasPlayableAddr(body)) throw new Error('分享页未返回播放地址');
 
-  const pick = (keys) => {
-    for (const k of keys) {
-      const idx = body.indexOf(k);
-      if (idx >= 0) {
-        let start = body.indexOf(':', idx + k.length);
-        if (start < 0) continue;
-        start += 1;
-        while (body[start] === ' ') start++;
-        let end = start, depth = 0, inStr = false;
-        for (; end < body.length; end++) {
-          const ch = body[end];
-          if (inStr) {
-            if (ch === '\\') { end++; continue; }
-            if (ch === '"') inStr = false;
-            continue;
-          }
-          if (ch === '"') { inStr = true; continue; }
-          if (ch === '{' || ch === '[') depth++;
-          if (ch === '}' || ch === ']') {
-            depth--;
-            if (depth === 0) { end++; break; }
-          }
-        }
-        const frag = body.slice(start, end);
-        try { return JSON.parse(frag); } catch (_) { continue; }
-      }
-    }
-    return null;
-  };
-
-  const playAddr = pick(['"play_addr"', 'play_addr']);
-  const coverData = pick(['"cover"']);
-  const desc = pick(['"desc"', '"Desc"']);
-  const author = pick(['"author"']);
-  const title = pick(['"title"']);
+  const playAddr = pickJson(body, ['"play_addr"', 'play_addr']);
+  const coverData = pickJson(body, ['"cover"']);
+  const desc = pickJson(body, ['"desc"', '"Desc"']);
+  const author = pickJson(body, ['"author"']);
+  const title = pickJson(body, ['"title"']);
   // 统计数据（点赞/评论/收藏/转发/播放/弹幕），分享页未返回时为 null
-  const st = pick(['"statistics"']);
+  const st = pickJson(body, ['"statistics"']);
   const stats = (st && typeof st === 'object') ? {
     play: st.play_count || 0,
     digg: st.digg_count || 0,
@@ -380,4 +411,6 @@ module.exports = {
   extractAwemeId,
   searchVideoByKeyword,
   parseByAwemeId,
+  parseViaTjit,
+  loadConfig,
 };

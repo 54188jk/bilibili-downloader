@@ -18,7 +18,8 @@ const uc = require('./uc');
 const musicApi = require('./music');
 const movieApi = require('./movie-api');
 const capture = require('./capture/capture');
-const { grabDouyinVideo } = require('./douyin-grab');
+const { resolveDouyinShare } = require('./douyin-resolve');
+const { prewarmGrabWindow } = require('./douyin-grab');
 
 // 初始化抖音私信模块：复用主进程已有的抖音登录态与 cookie 注入能力
 douyinIm.init({
@@ -768,12 +769,12 @@ ipcMain.handle('video:parseInput', async (_evt, text) => {
       }
     }
 
-    // 解析抖音链接
-    for (const url of douyinLinks) {
+    // 解析抖音链接（并发 4 路：批量粘贴多条时不再一条条串行等，按原顺序返回）
+    const dyResults = await runConcurrent(douyinLinks, async (url) => {
       try {
         const r = await resolveDouyinShare(url);
         if (r.ok) {
-          results.push({
+          return {
             ok: true,
             kind: 'douyin',
             id: r.data.awemeId,
@@ -785,14 +786,14 @@ ipcMain.handle('video:parseInput', async (_evt, text) => {
             stats: r.data.stats || null,
             source: r.source || 'local',
             url,
-          });
-        } else {
-          results.push({ ok: false, kind: 'douyin', id: url, error: r.error });
+          };
         }
+        return { ok: false, kind: 'douyin', id: url, error: r.error };
       } catch (e) {
-        results.push({ ok: false, kind: 'douyin', id: url, error: e.message });
+        return { ok: false, kind: 'douyin', id: url, error: e.message };
       }
-    }
+    }, 4);
+    for (const r of dyResults) results.push(r);
 
     // 解析快手链接（并发 4 路，显著提速；按原顺序返回）
     const ksResults = await runConcurrent(kuaishouLinks, async (url) => {
@@ -849,12 +850,12 @@ ipcMain.handle('douyin:parse', async (_evt, text) => {
   try {
     const links = douyin.extractLinks(text);
     if (!links.length) return { ok: false, error: '未识别到抖音链接' };
-    const results = [];
-    for (const url of links) {
+    // 并发 4 路解析（多条链接批量解析时总耗时 = 最慢的一条，而非求和）
+    const list = await runConcurrent(links, async (url) => {
       try {
         const r = await resolveDouyinShare(url);
         if (r.ok) {
-          results.push({
+          return {
             ok: true,
             kind: 'douyin',
             id: r.data.awemeId,
@@ -866,15 +867,14 @@ ipcMain.handle('douyin:parse', async (_evt, text) => {
             stats: r.data.stats || null,
             source: r.source || 'local',
             url,
-          });
-        } else {
-          results.push({ ok: false, kind: 'douyin', id: url, error: r.error });
+          };
         }
+        return { ok: false, kind: 'douyin', id: url, error: r.error };
       } catch (e) {
-        results.push({ ok: false, kind: 'douyin', id: url, error: e.message });
+        return { ok: false, kind: 'douyin', id: url, error: e.message };
       }
-    }
-    return { ok: true, data: results };
+    }, 4);
+    return { ok: true, data: list };
   } catch (e) {
     return { ok: false, error: e.message };
   }
@@ -1006,41 +1006,8 @@ function grabKuaishouVideo(photoId) {
   });
 }
 
-// 解析抖音分享链接：轻量分享页优先（亚秒级）→ 本地窗口抓取（已拦截重资源）→ tjit 兜底
-async function resolveDouyinShare(url) {
-  // 1) 提取 aweme_id（链接自带则直接跳过短链重定向解析，省 2~5 次串行请求）
-  let awemeId = douyin.extractAwemeId(url) || null;
-  if (!awemeId) {
-    try {
-      const resolved = await douyin.resolveUrl(url);
-      awemeId = resolved.awemeId || null;
-    } catch (_) {}
-  }
-
-  // 2) 快路径：iesdouyin 轻量分享页（单次请求约 0.5s，含统计数据；被风控时瞬间失败不拖时间）
-  if (awemeId) {
-    const fast = await douyin.parseByAwemeId(awemeId);
-    if (fast.ok) return { ok: true, data: fast.data, source: 'iesdouyin' };
-  }
-
-  // 3) 本地隐藏窗口抓取（真实浏览器环境过风控，最稳）
-  if (awemeId) {
-    try {
-      const r = await grabDouyinVideo(awemeId);
-      if (r.ok) return { ok: true, data: r.data, source: 'local' };
-      // 本地失败，记录原因再做兜底
-      const fb = await douyin.parseShare(url);
-      return fb.ok ? { ok: true, data: fb.data, source: fb.source } : { ok: false, error: fb.error + ' （本地抓取失败：' + r.error + '）' };
-    } catch (e) {
-      const fb = await douyin.parseShare(url);
-      return fb.ok ? { ok: true, data: fb.data, source: fb.source } : { ok: false, error: fb.error };
-    }
-  }
-
-  // 4) 没有 aweme_id：只能走 parseShare（tjit / 分享页兜底）
-  const r = await douyin.parseShare(url);
-  return r.ok ? { ok: true, data: r.data, source: r.source } : { ok: false, error: r.error };
-}
+// 解析抖音分享链接：编排逻辑已抽到 src/douyin-resolve.js
+// （快线路并行竞速 + 450ms 后才启动本地窗口 + 结果缓存，见该模块注释）
 
 // ===== 单独解析快手分享链接（窗口抓取） =====
 ipcMain.handle('kuaishou:parse', async (_evt, text) => {
@@ -3042,6 +3009,10 @@ app.whenReady().then(async () => {
   if (!hiddenStart) {
     createWindow();
   }
+
+  // 抖音解析窗口预热：启动 1.5s 后把隐藏窗口/分区/拦截器先建好，
+  // 首次解析不用再付窗口创建开销（实测省 200~500ms）
+  setTimeout(() => { try { prewarmGrabWindow(); } catch (_) {} }, 1500);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0 && !hiddenStart) createWindow();
